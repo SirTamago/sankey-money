@@ -34,14 +34,19 @@ public sealed partial class MainWindow : Window
             var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
             var appWindow = AppWindow.GetFromWindowId(windowId);
             appWindow.Resize(new Windows.Graphics.SizeInt32(1600, 1000));
-            if (appWindow.Presenter is OverlappedPresenter presenter)
-            {
-                // 去掉系统标题栏（保留可缩放的边框），改用网页内的 MD3 顶栏
-                presenter.SetBorderAndTitleBar(true, false);
-                presenter.IsResizable = true;
-                presenter.IsMaximizable = true;
-            }
-            Log("window sized + frameless title bar");
+
+            var tb = appWindow.TitleBar;
+            var surf = Windows.UI.Color.FromArgb(255, 0x21, 0x1F, 0x26);
+            var fg = Windows.UI.Color.FromArgb(255, 0xE6, 0xE0, 0xE9);
+            tb.BackgroundColor = surf;
+            tb.InactiveBackgroundColor = surf;
+            tb.ForegroundColor = fg;
+            tb.InactiveForegroundColor = fg;
+            tb.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
+            tb.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
+            tb.ButtonForegroundColor = fg;
+            tb.ButtonHoverBackgroundColor = Windows.UI.Color.FromArgb(40, 255, 255, 255);
+            Log("window sized + titlebar themed");
         }
         catch (Exception ex) { Log("window setup failed: " + ex.Message); }
 
@@ -121,7 +126,6 @@ public sealed partial class MainWindow : Window
                 "JSON.stringify({items:document.querySelectorAll('#itemList .item-row').length," +
                 "svg:document.querySelectorAll('#sankeyChart svg').length," +
                 "mdSelects:document.querySelectorAll('.md-select').length," +
-                "winControls:document.querySelectorAll('.win-btn').length," +
                 "initError:window.__initError})");
             Log("startup check: " + r);
         }
