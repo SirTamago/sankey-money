@@ -34,19 +34,14 @@ public sealed partial class MainWindow : Window
             var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
             var appWindow = AppWindow.GetFromWindowId(windowId);
             appWindow.Resize(new Windows.Graphics.SizeInt32(1600, 1000));
-
-            var tb = appWindow.TitleBar;
-            var surf = Windows.UI.Color.FromArgb(255, 0x21, 0x1F, 0x26);
-            var fg = Windows.UI.Color.FromArgb(255, 0xE6, 0xE0, 0xE9);
-            tb.BackgroundColor = surf;
-            tb.InactiveBackgroundColor = surf;
-            tb.ForegroundColor = fg;
-            tb.InactiveForegroundColor = fg;
-            tb.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
-            tb.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
-            tb.ButtonForegroundColor = fg;
-            tb.ButtonHoverBackgroundColor = Windows.UI.Color.FromArgb(40, 255, 255, 255);
-            Log("window sized + titlebar themed");
+            if (appWindow.Presenter is OverlappedPresenter presenter)
+            {
+                // 去掉系统标题栏（保留可缩放边框），改用网页内的 MD3 标题栏
+                presenter.SetBorderAndTitleBar(true, false);
+                presenter.IsResizable = true;
+                presenter.IsMaximizable = true;
+            }
+            Log("window sized + frameless (MD3 title bar)");
         }
         catch (Exception ex) { Log("window setup failed: " + ex.Message); }
 
@@ -64,6 +59,9 @@ public sealed partial class MainWindow : Window
         {
             await Web.EnsureCoreWebView2Async();
             Log("CoreWebView2 ready, version=" + Web.CoreWebView2.Environment.BrowserVersionString);
+
+            // 启用 app-region: drag（网页内的 MD3 标题栏拖动窗口）
+            Web.CoreWebView2.Settings.IsNonClientRegionSupportEnabled = true;
 
             Web.CoreWebView2.WebMessageReceived += OnWebMessage;
 

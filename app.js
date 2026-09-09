@@ -1257,8 +1257,17 @@ function bindEvents() {
   });
 }
 
+function initWindowControls() {
+  if (!HAS_NATIVE) return;
+  $("#winControls").hidden = false;
+  $("#winMin").addEventListener("click", () => nativeCall("WindowMinimize").catch(() => {}));
+  $("#winMax").addEventListener("click", () => nativeCall("WindowMaximizeToggle").catch(() => {}));
+  $("#winClose").addEventListener("click", () => nativeCall("WindowClose").catch(() => {}));
+}
+
 async function init() {
   bindEvents();
+  initWindowControls();
 
   calMonthPick = new MdDatePicker($("#calMonth"), "month", () => { selectedDate = null; renderCalendar(); });
   periodStartPick = new MdDatePicker($("#periodStart"), "date", (v) => { state.period.start = v; persist(); renderSankey(); });

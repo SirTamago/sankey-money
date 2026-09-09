@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=13" />
+  <link rel="stylesheet" href="styles.css?v=14" />
 </head>
 <body>
   <div id="app">
@@ -29,6 +29,11 @@
         <button id="btnSeed" class="btn">载入示例</button>
         <button id="btnExportCsv" class="btn">导出 CSV</button>
         <button id="btnExportSqlite" class="btn">导出 .sqlite</button>
+      </div>
+      <div class="win-controls" id="winControls" hidden>
+        <button class="win-btn" id="winMin" title="最小化"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor" stroke-width="1"/></svg></button>
+        <button class="win-btn" id="winMax" title="最大化"><svg width="10" height="10" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor"/></svg></button>
+        <button class="win-btn win-close" id="winClose" title="关闭"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"/></svg></button>
       </div>
     </header>
 
@@ -137,6 +142,6 @@
 
   <div id="mdDialogHost" hidden></div>
 
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>

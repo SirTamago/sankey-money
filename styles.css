@@ -77,10 +77,15 @@ html, body {
   align-items: center;
   gap: 18px;
   flex-wrap: wrap;
-  padding: 10px 20px;
+  padding: 10px 132px 10px 20px;
   background: var(--md-surface-container);
   border-bottom: 1px solid var(--md-outline-variant);
   user-select: none;
+  app-region: drag;
+}
+.topbar .btn, .topbar input, .topbar select, .topbar .md-select, .topbar .md-datepicker,
+.topbar .ledger-bar, .topbar .topbar-actions, .topbar .win-controls {
+  app-region: no-drag;
 }
 .brand h1 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 500; letter-spacing: .1px; }
 .tagline { margin: 2px 0 0; color: var(--md-on-surface-variant); font-size: 12px; }
