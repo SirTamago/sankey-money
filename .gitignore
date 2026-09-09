@@ -1,0 +1,19 @@
+# 构建产物
+dist/
+desktop/bin/
+desktop/obj/
+
+# 运行时数据与日志
+data/
+*.db
+app.log
+
+# 下载的安装脚本
+dotnet-install.ps1
+
+# 工具目录
+.zcode/
+
+# 操作系统
+Thumbs.db
+.DS_Store
