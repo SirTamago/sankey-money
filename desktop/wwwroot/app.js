@@ -1030,7 +1030,10 @@ async function init() {
   $("#calMonth").value = currentMonth();
   bindEvents();
 
-  ledgerSel = new MdSelect($("#ledgerSelect"), async (v) => { activeLedgerId = v; await loadActiveLedger(); });
+  ledgerSel = new MdSelect($("#ledgerSelect"), async (v) => {
+    activeLedgerId = /^\d+$/.test(String(v)) ? Number(v) : v;
+    try { await loadActiveLedger(); } catch (e) { alert("切换账单失败：" + e.message); }
+  });
   kindSel = new MdSelect($("#fKind"));
   kindSel.setOptions([
     { value: "income", label: "收入" },

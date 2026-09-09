@@ -66,7 +66,13 @@ public class NativeBridge
     }
 
     private static long GetLong(JsonElement[] args, int i)
-        => args.Length > i && args[i].ValueKind == JsonValueKind.Number ? args[i].GetInt64() : 0;
+    {
+        if (args.Length <= i) return 0;
+        var e = args[i];
+        if (e.ValueKind == JsonValueKind.Number) return e.GetInt64();
+        if (e.ValueKind == JsonValueKind.String && long.TryParse(e.GetString(), out var v)) return v;
+        return 0;
+    }
     private static string GetStr(JsonElement[] args, int i)
         => args.Length > i && args[i].ValueKind == JsonValueKind.String ? args[i].GetString() ?? "" : "";
 }
