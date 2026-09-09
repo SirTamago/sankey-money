@@ -176,6 +176,81 @@ function downloadText(text, filename) {
   URL.revokeObjectURL(a.href);
 }
 
+/* ================= MD3 下拉选单 ================= */
+class MdSelect {
+  constructor(host, onChange) {
+    this.host = host;
+    this.onChange = onChange;
+    this.options = [];
+    this.value = null;
+    this.host.classList.add("md-select");
+    this.host.innerHTML =
+      '<button type="button" class="md-select-trigger">' +
+      '<span class="md-select-label"></span>' +
+      '<span class="md-select-arrow"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">' +
+      '<path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>' +
+      '</button>' +
+      '<div class="md-menu" hidden></div>';
+    this.trigger = this.host.querySelector(".md-select-trigger");
+    this.labelEl = this.host.querySelector(".md-select-label");
+    this.menu = this.host.querySelector(".md-menu");
+    this.trigger.addEventListener("click", (e) => { e.stopPropagation(); this.toggle(); });
+    this._onDocClick = () => this.close();
+    this._onKey = (e) => { if (e.key === "Escape") this.close(); };
+    this._onMove = () => this.close();
+    document.addEventListener("click", this._onDocClick);
+    document.addEventListener("keydown", this._onKey);
+    window.addEventListener("resize", this._onMove);
+    window.addEventListener("scroll", this._onMove, true);
+  }
+  setOptions(opts) {
+    this.options = opts.slice();
+    if (this.value == null && opts.length) this.value = opts[0].value;
+    this.updateLabel();
+  }
+  setValue(v) { this.value = v; this.updateLabel(); }
+  updateLabel() {
+    const o = this.options.find(x => String(x.value) === String(this.value));
+    this.labelEl.textContent = o ? o.label : "";
+  }
+  toggle() { this.menu.hidden ? this.open() : this.close(); }
+  open() {
+    this.renderMenu();
+    const r = this.trigger.getBoundingClientRect();
+    const menuH = Math.min(300, this.options.length * 44 + 16);
+    const below = window.innerHeight - r.bottom - 8;
+    const openUp = below < menuH && r.top > below;
+    this.menu.style.left = r.left + "px";
+    this.menu.style.minWidth = r.width + "px";
+    if (openUp) { this.menu.style.top = "auto"; this.menu.style.bottom = (window.innerHeight - r.top + 4) + "px"; this.menu.style.transformOrigin = "bottom left"; }
+    else { this.menu.style.bottom = "auto"; this.menu.style.top = (r.bottom + 4) + "px"; this.menu.style.transformOrigin = "top left"; }
+    this.menu.hidden = false;
+    this.trigger.classList.add("open");
+    requestAnimationFrame(() => this.menu.classList.add("open"));
+  }
+  close() {
+    if (this.menu.hidden) return;
+    this.menu.classList.remove("open");
+    this.trigger.classList.remove("open");
+    clearTimeout(this._closeTimer);
+    this._closeTimer = setTimeout(() => { if (!this.menu.classList.contains("open")) this.menu.hidden = true; }, 150);
+  }
+  renderMenu() {
+    this.menu.innerHTML = this.options.map(o =>
+      `<button type="button" class="md-menu-item ${String(o.value) === String(this.value) ? "selected" : ""}" data-value="${svgEsc(String(o.value))}">${svgEsc(o.label)}</button>`
+    ).join("");
+    this.menu.querySelectorAll(".md-menu-item").forEach(el => {
+      el.addEventListener("click", (e) => { e.stopPropagation(); this.select(el.dataset.value); });
+    });
+  }
+  select(v) {
+    this.value = v;
+    this.updateLabel();
+    this.close();
+    if (this.onChange) this.onChange(v);
+  }
+}
+
 /* ================= 应用状态 ================= */
 let ledgers = [];
 let activeLedgerId = null;
@@ -183,7 +258,8 @@ let state = { ledgerId: null, period: { start: "2026-01", end: "2026-12" }, item
 let editingId = null;
 let selectedDate = todayYmd();
 let fadeTimer = null;
-let resizeTimer = null;
+let resizeRaf = null;
+let ledgerSel = null, kindSel = null, schedSel = null;
 
 /* ================= 排期展开引擎 ================= */
 function monthlyOccurrence(item, month) {
@@ -511,7 +587,9 @@ function renderMetrics(d) {
 }
 
 /* ================= 渲染：日历 ================= */
-function renderCalendar() {
+function renderCalendar() { renderCalendarGrid(); renderDayDetail(); }
+
+function renderCalendarGrid() {
   const month = $("#calMonth").value || currentMonth();
   let [y, m] = month.split("-").map(Number);
   if (!selectedDate || ymOf(selectedDate) !== month) selectedDate = ymdFrom(y, m, 1);
@@ -545,9 +623,9 @@ function renderCalendar() {
 
   $$("#calGrid .cal-cell[data-date]").forEach(el => el.addEventListener("click", () => {
     selectedDate = el.dataset.date;
-    renderCalendar();
+    renderCalendarGrid();
+    renderDayDetail();
   }));
-  renderDayDetail();
 }
 
 function displayName(name) {
@@ -626,7 +704,7 @@ function renderItemList() {
     const idv = row.dataset.id;
     const item = state.items.find(i => i.id === idv);
     if (!item) return;
-    $("[data-role=toggle]", row).addEventListener("change", (e) => { item.enabled = e.target.checked; afterMutate(); });
+    $("[data-role=toggle]", row).addEventListener("change", (e) => onToggle(item, row, e.target.checked, "list"));
     $("[data-role=edit]", row).addEventListener("click", () => openForm(item));
     $("[data-role=delete]", row).addEventListener("click", () => deleteItem(idv));
   });
@@ -650,7 +728,7 @@ function renderDayDetail() {
     const idv = row.dataset.id;
     const item = state.items.find(i => i.id === idv);
     if (!item) return;
-    $("[data-role=toggle]", row).addEventListener("change", (e) => { item.enabled = e.target.checked; afterMutate(); });
+    $("[data-role=toggle]", row).addEventListener("change", (e) => onToggle(item, row, e.target.checked, "day"));
     $("[data-role=edit]", row).addEventListener("click", () => openForm(item));
     $("[data-role=delete]", row).addEventListener("click", () => deleteItem(idv));
     const adddate = $("[data-role=adddate]", row);
@@ -662,6 +740,16 @@ function renderDayDetail() {
 function renderAll() { renderCatDatalist(); renderItemList(); renderCalendar(); renderSankey(); renderLedgerSelect(); }
 
 function afterMutate() { persist(); renderAll(); }
+
+/* 开关：不重建列表（保留 DOM 以便播放开关动画） */
+function onToggle(item, row, checked, source) {
+  item.enabled = checked;
+  if (row) row.classList.toggle("disabled", !checked);
+  persist();
+  renderSankey();
+  renderCalendarGrid();
+  if (source !== "day") renderDayDetail();
+}
 
 /* ================= 持久化 ================= */
 let savedTimer = null;
@@ -685,11 +773,9 @@ function flashSaved(text, isError) {
 
 /* ================= 账单（数据集） ================= */
 function renderLedgerSelect() {
-  const sel = $("#ledgerSelect");
-  if (!sel) return;
-  sel.innerHTML = ledgers.map(l =>
-    `<option value="${l.id}" ${String(l.id) === String(activeLedgerId) ? "selected" : ""}>${escapeHtml(l.name)}（${l.itemCount}）</option>`
-  ).join("");
+  if (!ledgerSel) return;
+  ledgerSel.setOptions(ledgers.map(l => ({ value: l.id, label: `${l.name}（${l.itemCount}）` })));
+  ledgerSel.setValue(activeLedgerId);
 }
 
 async function loadActiveLedger() {
@@ -738,7 +824,7 @@ function showSchedFields(type) {
 
 function updatePeriodHint() {
   const hint = $("#fPeriodHint");
-  const type = $("#fSched").value;
+  const type = schedSel ? schedSel.value : "recurring";
   if (type !== "recurring") { hint.hidden = true; return; }
   const amount = Number($("#fAmount").value) || 0;
   const start = $("#fStart").value;
@@ -763,10 +849,10 @@ function openForm(item, prefill) {
   $("#modalTitle").textContent = item ? "编辑项目" : "新增项目";
   $("#fName").value = item ? item.name : "";
   $("#fAmount").value = item ? item.amount : "";
-  $("#fKind").value = item ? item.kind : (prefill && prefill.kind) || "expense";
+  kindSel.setValue(item ? item.kind : (prefill && prefill.kind) || "expense");
   $("#fCategory").value = item ? (item.category || "") : "";
   const s = item ? item.schedule : (prefill || { type: "recurring" });
-  $("#fSched").value = s.type;
+  schedSel.setValue(s.type);
   $("#fStart").value = s.type === "recurring" ? (s.start || "") : "";
   $("#fEnd").value = s.type === "recurring" ? (s.end || "") : "";
   $("#fDay").value = s.type === "recurring" ? (s.dayOfMonth || 1) : "";
@@ -787,9 +873,9 @@ function submitForm(e) {
   const name = $("#fName").value.trim();
   const amount = Number($("#fAmount").value);
   if (!name || isNaN(amount) || amount < 0) return alert("请填写名称和有效金额");
-  const kind = $("#fKind").value;
+  const kind = kindSel.value;
   const category = $("#fCategory").value.trim() || (kind === "income" ? "其他收入" : "其他支出");
-  const type = $("#fSched").value;
+  const type = schedSel.value;
   let schedule;
   if (type === "recurring") {
     const start = $("#fStart").value;
@@ -896,14 +982,8 @@ function bindEvents() {
   $("#btnCancel").addEventListener("click", closeForm);
   $("#itemForm").addEventListener("submit", submitForm);
   $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeForm(); });
-  $("#fSched").addEventListener("change", () => { showSchedFields($("#fSched").value); updatePeriodHint(); });
   ["fAmount", "fDay", "fStart", "fEnd"].forEach(fid => $("#" + fid).addEventListener("input", updatePeriodHint));
 
-  // 账单切换
-  $("#ledgerSelect").addEventListener("change", async (e) => {
-    activeLedgerId = e.target.value;
-    await loadActiveLedger();
-  });
   $("#btnNewLedger").addEventListener("click", newLedger);
   $("#btnRenameLedger").addEventListener("click", renameLedger);
   $("#btnDeleteLedger").addEventListener("click", deleteLedger);
@@ -937,8 +1017,11 @@ function bindEvents() {
   $("#calMonth").addEventListener("change", () => { selectedDate = null; renderCalendar(); });
 
   window.addEventListener("resize", () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => { if (lastSankeyData) renderSankeySvg(lastSankeyData, { fade: false }); }, 140);
+    if (resizeRaf) return;
+    resizeRaf = requestAnimationFrame(() => {
+      resizeRaf = null;
+      if (lastSankeyData) renderSankeySvg(lastSankeyData, { fade: false });
+    });
   });
 }
 
@@ -946,6 +1029,23 @@ async function init() {
   $("#modeMonth").value = currentMonth();
   $("#calMonth").value = currentMonth();
   bindEvents();
+
+  ledgerSel = new MdSelect($("#ledgerSelect"), async (v) => { activeLedgerId = v; await loadActiveLedger(); });
+  kindSel = new MdSelect($("#fKind"));
+  kindSel.setOptions([
+    { value: "income", label: "收入" },
+    { value: "expense", label: "支出" },
+    { value: "loan", label: "支出 · 借贷/分期" },
+  ]);
+  kindSel.setValue("expense");
+  schedSel = new MdSelect($("#fSched"), (v) => { showSchedFields(v); updatePeriodHint(); });
+  schedSel.setOptions([
+    { value: "recurring", label: "重复 · 固定日期（自定开始/结束）" },
+    { value: "oneoff", label: "一次性 · 确定日期" },
+    { value: "monthly", label: "按月手动（非固定日期）" },
+  ]);
+  schedSel.setValue("recurring");
+
   try {
     ledgers = await store.list();
     window.__ledgersLoaded = ledgers.length;

@@ -196,12 +196,13 @@ html, body {
   position: absolute; inset: 0; border-radius: 999px; pointer-events: none;
   background: var(--md-surface-highest);
   border: 2px solid var(--md-outline);
-  transition: background .2s ease, border-color .2s ease;
+  transition: background .2s cubic-bezier(.2,0,0,1), border-color .2s cubic-bezier(.2,0,0,1);
 }
 .switch .slider::before {
   content: ""; position: absolute; top: 50%; left: 5px; transform: translateY(-50%);
   width: 16px; height: 16px; border-radius: 50%; background: var(--md-outline);
-  transition: all .2s ease;
+  transition: left .2s cubic-bezier(.2,0,0,1), width .2s cubic-bezier(.2,0,0,1),
+              height .2s cubic-bezier(.2,0,0,1), background .2s ease;
 }
 .switch input:checked + .slider { background: var(--md-primary); border-color: var(--md-primary); }
 .switch input:checked + .slider::before { width: 24px; height: 24px; left: 22px; background: var(--md-on-primary); }
@@ -271,11 +272,51 @@ input[type="month"]::-webkit-calendar-picker-indicator { filter: invert(.75); op
 input[type="date"]::-webkit-calendar-picker-indicator:hover,
 input[type="month"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
 
+/* ---------- MD3 下拉选单 ---------- */
+.md-select { position: relative; display: inline-block; min-width: 170px; }
+.md-select-trigger {
+  width: 100%; height: 44px; padding: 0 40px 0 14px;
+  display: flex; align-items: center;
+  background: transparent; color: var(--md-on-surface);
+  border: 1px solid var(--md-outline); border-radius: var(--md-xs);
+  font-family: inherit; font-size: 14px; text-align: left; cursor: pointer;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.md-select-trigger:hover { border-color: var(--md-on-surface); }
+.md-select-trigger.open { border-color: var(--md-primary); box-shadow: inset 0 0 0 1px var(--md-primary); }
+.md-select-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.md-select-arrow {
+  position: absolute; right: 14px; top: 50%; display: flex;
+  color: var(--md-on-surface-variant); pointer-events: none;
+  transform: translateY(-50%); transition: transform .2s ease;
+}
+.md-select-trigger.open .md-select-arrow { transform: translateY(-50%) rotate(180deg); }
+
+.md-menu {
+  position: fixed; z-index: 200; min-width: 120px; max-height: 300px; overflow-y: auto;
+  padding: 8px 0;
+  background: var(--md-surface-high); border-radius: var(--md-sm);
+  box-shadow: var(--md-e2);
+  opacity: 0; transform: scale(.92) translateY(-6px);
+  transition: opacity .15s ease, transform .15s ease;
+}
+.md-menu.open { opacity: 1; transform: none; }
+.md-menu-item {
+  display: block; width: 100%; text-align: left;
+  padding: 10px 16px; border: none; background: transparent; cursor: pointer;
+  color: var(--md-on-surface); font-family: inherit; font-size: 14px; white-space: nowrap;
+  transition: background .12s ease;
+}
+.md-menu-item:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+.md-menu-item.selected { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+
+.modal-body .field .md-select { width: 100%; min-width: 0; }
+
 /* ---------- 图表 ---------- */
 .chart-title { color: var(--md-on-surface-variant); font-size: 13px; margin: 8px 0; }
 .chart-wrap { position: relative; }
 .chart {
-  width: 100%; height: 520px;
+  width: 100%; height: clamp(380px, 56vh, 620px);
   background: var(--md-surface-container);
   border-radius: var(--md-lg);
   position: relative; overflow: hidden;
@@ -387,6 +428,10 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
 html.native, html.native body { background: var(--md-surface); }
 
 /* ---------- 响应式 ---------- */
+@media (max-width: 1180px) {
+  .sidebar { width: 260px; min-width: 220px; }
+  .metric-row { grid-template-columns: repeat(2, 1fr); }
+}
 @media (max-width: 860px) {
   .layout { flex-direction: column; }
   .sidebar { width: 100%; min-width: 0; max-height: 40vh; border-right: none; border-bottom: 1px solid var(--md-outline-variant); }

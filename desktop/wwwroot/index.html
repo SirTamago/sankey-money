@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=6" />
+  <link rel="stylesheet" href="styles.css?v=7" />
 </head>
 <body>
   <div id="app">
@@ -18,7 +18,7 @@
       </div>
       <div class="ledger-bar">
         <label for="ledgerSelect">账单</label>
-        <select id="ledgerSelect"></select>
+        <div id="ledgerSelect"></div>
         <button id="btnNewLedger" class="btn">＋ 新建</button>
         <button id="btnRenameLedger" class="btn">重命名</button>
         <button id="btnDeleteLedger" class="btn">删除</button>
@@ -102,11 +102,7 @@
           <div class="field"><label>名称</label><input id="fName" placeholder="如：房租" required /></div>
           <div class="field"><label>金额 (¥)</label><input id="fAmount" type="number" min="0" step="0.01" placeholder="3000" required /></div>
           <div class="field"><label>类型</label>
-            <select id="fKind">
-              <option value="income">收入</option>
-              <option value="expense">支出</option>
-              <option value="loan">支出 · 借贷/分期</option>
-            </select>
+            <div id="fKind"></div>
           </div>
           <div class="field"><label>分类</label>
             <input id="fCategory" list="catList" placeholder="如：固定开销" />
@@ -115,11 +111,7 @@
         </div>
 
         <div class="field"><label>排期方式</label>
-          <select id="fSched">
-            <option value="recurring">重复 · 固定日期（自定开始/结束）</option>
-            <option value="oneoff">一次性 · 确定日期</option>
-            <option value="monthly">按月手动（非固定日期）</option>
-          </select>
+          <div id="fSched"></div>
         </div>
 
         <div class="grid-2" id="schedRecurring">
@@ -143,6 +135,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

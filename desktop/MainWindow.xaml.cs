@@ -123,7 +123,10 @@ public sealed partial class MainWindow : Window
             await Task.Delay(1800);
             var r = await Web.CoreWebView2.ExecuteScriptAsync(
                 "JSON.stringify({items:document.querySelectorAll('#itemList .item-row').length," +
-                "svg:document.querySelectorAll('#sankeyChart svg').length,initError:window.__initError})");
+                "svg:document.querySelectorAll('#sankeyChart svg').length," +
+                "mdSelects:document.querySelectorAll('.md-select').length," +
+                "ledgerLabel:(document.querySelector('#ledgerSelect .md-select-label')||{}).textContent," +
+                "initError:window.__initError})");
             Log("startup check: " + r);
         }
         catch (Exception ex) { Log("VerifyAsync failed: " + ex.Message); }
