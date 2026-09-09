@@ -7,21 +7,6 @@
     Title="收支桑基图">
 
     <Grid x:Name="RootGrid">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="48" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-
-        <Grid x:Name="AppTitleBar" Grid.Row="0" Height="48" Padding="16,0,0,0">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="10">
-                <Border Width="4" Height="16" CornerRadius="2" Background="{ThemeResource AccentFillColorDefaultBrush}" />
-                <TextBlock Text="收支 / 分期 桑基图看板"
-                           VerticalAlignment="Center"
-                           FontSize="12.5"
-                           Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-            </StackPanel>
-        </Grid>
-
-        <controls:WebView2 x:Name="Web" Grid.Row="1" />
+        <controls:WebView2 x:Name="Web" />
     </Grid>
 </Window>

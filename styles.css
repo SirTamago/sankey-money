@@ -77,18 +77,30 @@ html, body {
   align-items: center;
   gap: 18px;
   flex-wrap: wrap;
-  padding: 12px 20px;
+  padding: 10px 8px 10px 20px;
   background: var(--md-surface-container);
   border-bottom: 1px solid var(--md-outline-variant);
+  user-select: none;
 }
 .brand h1 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 500; letter-spacing: .1px; }
 .tagline { margin: 2px 0 0; color: var(--md-on-surface-variant); font-size: 12px; }
 .topbar-actions, .ledger-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ledger-bar { margin-left: auto; }
-.ledger-bar label { color: var(--md-on-surface-variant); font-size: 12px; }
+.ledger-bar label { color: var(--md-on-surface-variant); font-size: 12px; font-weight: 500; letter-spacing: .4px; }
 .ledger-bar select { min-width: 170px; }
 .save-state { color: var(--md-income); font-size: 12px; min-width: 44px; }
 .save-state.err { color: var(--md-error); }
+
+/* 窗口控制按钮（MD3 顶栏） */
+.win-controls { display: flex; align-items: center; gap: 2px; margin-left: 6px; }
+.win-btn {
+  width: 40px; height: 40px; border: none; background: transparent;
+  color: var(--md-on-surface-variant); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--md-sm); transition: background .12s ease, color .12s ease;
+}
+.win-btn:hover { background: color-mix(in srgb, var(--md-on-surface) 10%, transparent); color: var(--md-on-surface); }
+.win-btn.win-close:hover { background: var(--md-error); color: var(--md-on-error); }
 
 /* ---------- 按钮 ---------- */
 .btn {
@@ -237,7 +249,7 @@ html, body {
 /* ---------- 控件行 ---------- */
 .control-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
 .field { display: flex; align-items: center; gap: 8px; }
-.field label { color: var(--md-on-surface-variant); font-size: 12px; }
+.field label { color: var(--md-on-surface-variant); font-size: 12px; font-weight: 500; letter-spacing: .4px; }
 .field .sep { color: var(--md-on-surface-variant); }
 
 /* ---------- 输入（MD3 outlined） ---------- */
@@ -443,6 +455,24 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
   font-size: 13px; padding: 12px 14px; border-radius: var(--md-sm); margin-bottom: 16px;
 }
 .period-hint b { color: var(--md-income); font-weight: 500; }
+
+/* ---------- MD3 对话框（alert / confirm / prompt） ---------- */
+#mdDialogHost { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.md-scrim { position: absolute; inset: 0; background: rgba(0, 0, 0, .6); opacity: 0; transition: opacity .16s ease; }
+#mdDialogHost.open .md-scrim { opacity: 1; }
+.md-dialog {
+  position: relative; width: min(420px, calc(100vw - 48px));
+  background: var(--md-surface-high); border-radius: var(--md-xl); box-shadow: var(--md-e3);
+  padding: 24px; opacity: 0; transform: scale(.92);
+  transition: opacity .16s ease, transform .16s ease;
+}
+#mdDialogHost.open .md-dialog { opacity: 1; transform: none; }
+.md-dialog-title { margin: 0 0 16px; font-size: 22px; line-height: 28px; font-weight: 400; }
+.md-dialog-body { color: var(--md-on-surface-variant); font-size: 14px; line-height: 20px; margin-bottom: 20px; word-break: break-word; }
+.md-dialog-input { width: 100%; margin-bottom: 20px; }
+.md-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.md-dialog-ok.danger { background: var(--md-error); color: var(--md-on-error); }
+.md-dialog-ok.danger:hover { background: color-mix(in srgb, var(--md-error) 90%, #fff); }
 
 /* ---------- 滚动条 ---------- */
 * { scrollbar-width: thin; scrollbar-color: var(--md-surface-highest) transparent; }

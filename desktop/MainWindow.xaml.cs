@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.Web.WebView2.Core;
@@ -24,33 +25,28 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        Title = "Sankey Money";
-        try { SystemBackdrop = new MicaBackdrop(); Log("MicaBackdrop applied"); }
-        catch (Exception ex) { Log("Mica failed: " + ex.Message); }
-        ExtendsContentIntoTitleBar = true;
-        SetTitleBar(AppTitleBar);
+        Title = "收支桑基图";
+        try { SystemBackdrop = new MicaBackdrop(); } catch { /* ignore */ }
 
         try
         {
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
             var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
-            var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId);
+            var appWindow = AppWindow.GetFromWindowId(windowId);
             appWindow.Resize(new Windows.Graphics.SizeInt32(1600, 1000));
-
-            var tb = appWindow.TitleBar;
-            tb.PreferredHeightOption = Microsoft.UI.Windowing.TitleBarHeightOption.Tall;
-            tb.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
-            tb.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
-            tb.ButtonForegroundColor = Windows.UI.Color.FromArgb(255, 230, 237, 245);
-            tb.ButtonHoverForegroundColor = Microsoft.UI.Colors.White;
-            tb.ButtonHoverBackgroundColor = Windows.UI.Color.FromArgb(40, 255, 255, 255);
-            tb.ButtonPressedBackgroundColor = Windows.UI.Color.FromArgb(60, 255, 255, 255);
-            Log("window sized + titlebar configured");
+            if (appWindow.Presenter is OverlappedPresenter presenter)
+            {
+                // 去掉系统标题栏（保留可缩放的边框），改用网页内的 MD3 顶栏
+                presenter.SetBorderAndTitleBar(true, false);
+                presenter.IsResizable = true;
+                presenter.IsMaximizable = true;
+            }
+            Log("window sized + frameless title bar");
         }
         catch (Exception ex) { Log("window setup failed: " + ex.Message); }
 
         _store = new SqliteStore();
-        _bridge = new NativeBridge(_store);
+        _bridge = new NativeBridge(_store, this);
         Log("SQLite DB = " + _store.DbPath);
 
         Web.Loaded += Web_Loaded;
@@ -125,7 +121,7 @@ public sealed partial class MainWindow : Window
                 "JSON.stringify({items:document.querySelectorAll('#itemList .item-row').length," +
                 "svg:document.querySelectorAll('#sankeyChart svg').length," +
                 "mdSelects:document.querySelectorAll('.md-select').length," +
-                "ledgerLabel:(document.querySelector('#ledgerSelect .md-select-label')||{}).textContent," +
+                "winControls:document.querySelectorAll('.win-btn').length," +
                 "initError:window.__initError})");
             Log("startup check: " + r);
         }

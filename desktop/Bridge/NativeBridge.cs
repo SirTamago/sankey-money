@@ -1,7 +1,10 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using Microsoft.UI.Windowing;
+using Microsoft.UI.Xaml;
 
 namespace SankeyMoney;
 
@@ -10,10 +13,12 @@ namespace SankeyMoney;
 public class NativeBridge
 {
     private readonly SqliteStore _store;
+    private readonly Window _window;
 
-    public NativeBridge(SqliteStore store)
+    public NativeBridge(SqliteStore store, Window window)
     {
         _store = store;
+        _window = window;
     }
 
     public string Invoke(string method, JsonElement[] args)
@@ -30,9 +35,49 @@ public class NativeBridge
             case "ExportSqlite": return ExportSqlite(GetLong(args, 0));
             case "DbPath": return _store.DbPath;
             case "Log": MainWindow.Log("[web] " + GetStr(args, 0)); return "{}";
+            case "WindowDrag": return WindowDrag();
+            case "WindowMinimize": return WindowMinimize();
+            case "WindowMaximizeToggle": return WindowMaximizeToggle();
+            case "WindowClose": _window.Close(); return "{}";
             default: throw new InvalidOperationException("unknown method: " + method);
         }
     }
+
+    private AppWindow AppWin()
+    {
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(_window);
+        return AppWindow.GetFromWindowId(Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd));
+    }
+
+    private const int WM_NCLBUTTONDOWN = 0xA1;
+    private const int HTCAPTION = 0x2;
+    [DllImport("user32.dll")] private static extern bool ReleaseCapture();
+    [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    private string WindowDrag()
+    {
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(_window);
+        ReleaseCapture();
+        SendMessage(hwnd, WM_NCLBUTTONDOWN, (IntPtr)HTCAPTION, IntPtr.Zero);
+        return "{}";
+    }
+
+    private string WindowMinimize()
+    {
+        (AppWin().Presenter as OverlappedPresenter)?.Minimize();
+        return "{}";
+    }
+
+    private string WindowMaximizeToggle()
+    {
+        if (AppWin().Presenter is OverlappedPresenter p)
+        {
+            if (p.State == OverlappedPresenterState.Maximized) p.Restore();
+            else p.Maximize();
+        }
+        return "{}";
+    }
+
 
     private string ExportCsv(long id)
     {
