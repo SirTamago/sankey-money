@@ -60,9 +60,6 @@ public sealed partial class MainWindow : Window
             await Web.EnsureCoreWebView2Async();
             Log("CoreWebView2 ready, version=" + Web.CoreWebView2.Environment.BrowserVersionString);
 
-            // 启用 app-region: drag（网页内的 MD3 标题栏拖动窗口）
-            Web.CoreWebView2.Settings.IsNonClientRegionSupportEnabled = true;
-
             Web.CoreWebView2.WebMessageReceived += OnWebMessage;
 
             var wwwroot = Path.Combine(AppContext.BaseDirectory, "wwwroot");

@@ -35,7 +35,7 @@ public class NativeBridge
             case "ExportSqlite": return ExportSqlite(GetLong(args, 0));
             case "DbPath": return _store.DbPath;
             case "Log": MainWindow.Log("[web] " + GetStr(args, 0)); return "{}";
-            case "WindowDrag": return WindowDrag();
+            case "WindowDragStart": return WindowDragStart();
             case "WindowMinimize": return WindowMinimize();
             case "WindowMaximizeToggle": return WindowMaximizeToggle();
             case "WindowClose": _window.Close(); return "{}";
@@ -49,16 +49,39 @@ public class NativeBridge
         return AppWindow.GetFromWindowId(Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd));
     }
 
-    private const int WM_NCLBUTTONDOWN = 0xA1;
-    private const int HTCAPTION = 0x2;
-    [DllImport("user32.dll")] private static extern bool ReleaseCapture();
-    [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+    private const int VK_LBUTTON = 0x01;
+    private const uint SWP_NOSIZE = 0x0001, SWP_NOZORDER = 0x0004, SWP_NOACTIVATE = 0x0010;
 
-    private string WindowDrag()
+    [StructLayout(LayoutKind.Sequential)] private struct POINT { public int X; public int Y; }
+    [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out POINT p);
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hWnd, out RECT r);
+    [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+    [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vKey);
+
+    /// <summary>按住标题栏时在后台线程轮询光标并移动窗口；松开左键自动结束。</summary>
+    private string WindowDragStart()
     {
+        if (AppWin().Presenter is OverlappedPresenter p && p.State == OverlappedPresenterState.Maximized) return "{}";
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(_window);
-        ReleaseCapture();
-        SendMessage(hwnd, WM_NCLBUTTONDOWN, (IntPtr)HTCAPTION, IntPtr.Zero);
+        if (!GetCursorPos(out var start)) return "{}";
+        if (!GetWindowRect(hwnd, out var rect)) return "{}";
+        var thread = new System.Threading.Thread(() =>
+        {
+            while ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0)
+            {
+                if (GetCursorPos(out var cur))
+                {
+                    SetWindowPos(hwnd, IntPtr.Zero,
+                        rect.Left + (cur.X - start.X),
+                        rect.Top + (cur.Y - start.Y),
+                        0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                }
+                System.Threading.Thread.Sleep(8);
+            }
+        }) { IsBackground = true };
+        thread.Start();
         return "{}";
     }
 
