@@ -122,10 +122,8 @@ public sealed partial class MainWindow : Window
         {
             await Task.Delay(1800);
             var r = await Web.CoreWebView2.ExecuteScriptAsync(
-                "JSON.stringify({ledgers:window.__ledgersLoaded,items:document.querySelectorAll('#itemList .item-row').length," +
-                "svg:document.querySelectorAll('#sankeyChart svg.sankey-svg').length," +
-                "links:document.querySelectorAll('#sankeyChart .sk-link').length," +
-                "initError:window.__initError})");
+                "JSON.stringify({items:document.querySelectorAll('#itemList .item-row').length," +
+                "svg:document.querySelectorAll('#sankeyChart svg').length,initError:window.__initError})");
             Log("startup check: " + r);
         }
         catch (Exception ex) { Log("VerifyAsync failed: " + ex.Message); }

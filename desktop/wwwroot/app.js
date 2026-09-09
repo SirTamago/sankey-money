@@ -25,7 +25,7 @@ function monthsBetween(start, end) {
 }
 
 /* 颜色 */
-const PALETTE = ["#61ddaa", "#5b8ff9", "#f6903d", "#ea7baa", "#6dc8ec", "#9f7bff", "#f6bd16", "#f08bb4", "#34c6b8", "#00b3ff"];
+const PALETTE = ["#D0BCFF", "#CCC2DC", "#EFB8C8", "#8FD9A8", "#FFB77C", "#9FC9FF", "#F6BD16", "#B0A7C9", "#80CBC4", "#F2B8B5"];
 const colorMap = new Map();
 let colorIdx = 0;
 function colorFor(key) {
@@ -41,8 +41,8 @@ const fmtShort = (n) => Number(n || 0).toLocaleString("zh-CN", { maximumFraction
 /* 分类 / 类型 */
 const KIND_LABEL = { income: "收入", expense: "支出", loan: "借贷/分期" };
 const CATEGORY_DEFAULTS = ["工资", "兼职", "补贴", "借入", "固定开销", "分期还款", "房贷/车贷", "日常消费", "数码产品"];
-const TYPE_COLOR = { income: "#36cfc9", expense: "#f6903d", loan: "#ff4d4f" };
-const FONT_STACK = '"Segoe UI Variable Text","Segoe UI","Microsoft YaHei UI","Noto Sans SC","PingFang SC",system-ui,sans-serif';
+const TYPE_COLOR = { income: "#8FD9A8", expense: "#FFB77C", loan: "#F2B8B5" };
+const FONT_STACK = '"Roboto","Noto Sans SC","Microsoft YaHei UI",system-ui,sans-serif';
 
 /* ================= 存储层（桌面版走原生 SQLite，浏览器回退 localStorage） ================= */
 const HAS_NATIVE = !!(window.chrome && window.chrome.webview && typeof window.chrome.webview.postMessage === "function");
@@ -265,10 +265,10 @@ function buildSankeyMonths(months) {
     itemStyle: { color: colorFor("in:" + l), opacity: 0.92 }, usrLabel: l, usrCount: inCnt[l],
     label: { position: "left" }
   }));
-  nodes.push({ name: "总收入来源", value: totalIncome, depth: 1, itemStyle: { color: "#5b8ff9", opacity: 0.92 }, usrLabel: "总收入来源", label: { position: "top" } });
+  nodes.push({ name: "总收入来源", value: totalIncome, depth: 1, itemStyle: { color: "#D0BCFF", opacity: 0.92 }, usrLabel: "总收入来源", label: { position: "top" } });
   inLabels.forEach(l => links.push({ source: "IN_" + l, target: "总收入来源", value: income[l] }));
 
-  nodes.push({ name: "总计划支出", value: totalExpense, depth: 2, itemStyle: { color: "#f26d6d", opacity: 0.92 }, usrLabel: "总计划支出", label: { position: "top" } });
+  nodes.push({ name: "总计划支出", value: totalExpense, depth: 2, itemStyle: { color: "#EFB8C8", opacity: 0.92 }, usrLabel: "总计划支出", label: { position: "top" } });
   links.push({ source: "总收入来源", target: "总计划支出", value: totalExpense });
 
   exLabels.forEach(l => nodes.push({
@@ -279,10 +279,10 @@ function buildSankeyMonths(months) {
   exLabels.forEach(l => links.push({ source: "总计划支出", target: "EX_" + l, value: expense[l] }));
 
   if (surplus >= 0) {
-    nodes.push({ name: "结余/自由支配", value: surplus, depth: 2, itemStyle: { color: "#36cfc9", opacity: 0.92 }, usrLabel: "结余 / 自由支配", label: { position: "bottom" } });
+    nodes.push({ name: "结余/自由支配", value: surplus, depth: 2, itemStyle: { color: "#8FD9A8", opacity: 0.92 }, usrLabel: "结余 / 自由支配", label: { position: "bottom" } });
     links.push({ source: "总收入来源", target: "结余/自由支配", value: surplus });
   } else {
-    nodes.push({ name: "超支", value: -surplus, depth: 2, itemStyle: { color: "#ff4d4f", opacity: 0.92 }, usrLabel: "超支", label: { position: "bottom" } });
+    nodes.push({ name: "超支", value: -surplus, depth: 2, itemStyle: { color: "#F2B8B5", opacity: 0.92 }, usrLabel: "超支", label: { position: "bottom" } });
     links.push({ source: "总收入来源", target: "超支", value: -surplus });
   }
 
