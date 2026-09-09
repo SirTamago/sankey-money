@@ -1,5 +1,5 @@
 # 构建产物
-dist/
+dist*/
 desktop/bin/
 desktop/obj/
 
