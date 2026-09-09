@@ -42,6 +42,9 @@ public sealed partial class MainWindow : Window
                 presenter.IsMaximizable = true;
             }
             Log("window sized + frameless (MD3 title bar)");
+
+            var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
+            if (File.Exists(iconPath)) { appWindow.SetIcon(iconPath); Log("window icon set"); }
         }
         catch (Exception ex) { Log("window setup failed: " + ex.Message); }
 

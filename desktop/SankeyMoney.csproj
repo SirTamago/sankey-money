@@ -17,6 +17,7 @@
     <SelfContained>true</SelfContained>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <AssemblyName>SankeyMoney</AssemblyName>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,6 +29,7 @@
 
   <ItemGroup>
     <Content Include="wwwroot\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\app.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
