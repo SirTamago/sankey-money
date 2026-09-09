@@ -312,6 +312,34 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
 
 .modal-body .field .md-select { width: 100%; min-width: 0; }
 
+/* ---------- MD3 日期 / 月份选择器 ---------- */
+.md-datepicker { position: relative; display: inline-block; min-width: 150px; }
+.md-dp-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--md-on-surface-variant); pointer-events: none; display: flex; }
+.md-dp-popup {
+  position: fixed; z-index: 200; padding: 12px;
+  background: var(--md-surface-high); border-radius: var(--md-md); box-shadow: var(--md-e3);
+  opacity: 0; transform: scale(.94) translateY(-6px);
+  transition: opacity .15s ease, transform .15s ease;
+}
+.md-dp-popup.open { opacity: 1; transform: none; }
+.md-dp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.md-dp-title { font-size: 14px; font-weight: 500; }
+.md-dp-nav { width: 36px; height: 36px; border: none; background: transparent; color: var(--md-on-surface-variant); border-radius: 50%; cursor: pointer; font-size: 20px; line-height: 1; }
+.md-dp-nav:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+.md-dp-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 4px; }
+.md-dp-week span { text-align: center; font-size: 11px; color: var(--md-on-surface-variant); }
+.md-dp-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.md-dp-day { height: 36px; border: none; background: transparent; color: var(--md-on-surface); border-radius: 50%; cursor: pointer; font-family: inherit; font-size: 13px; }
+.md-dp-day:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+.md-dp-day.today { box-shadow: inset 0 0 0 1px var(--md-primary); }
+.md-dp-day.sel { background: var(--md-primary); color: var(--md-on-primary); }
+.md-dp-day.empty { pointer-events: none; }
+.md-dp-months { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.md-dp-month { height: 46px; border: 1px solid var(--md-outline-variant); background: transparent; color: var(--md-on-surface); border-radius: var(--md-sm); cursor: pointer; font-family: inherit; font-size: 13px; }
+.md-dp-month:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+.md-dp-month.sel { background: var(--md-primary); color: var(--md-on-primary); border-color: var(--md-primary); }
+.modal-body .field .md-datepicker { width: 100%; min-width: 0; }
+
 /* ---------- 图表 ---------- */
 .chart-title { color: var(--md-on-surface-variant); font-size: 13px; margin: 8px 0; }
 .chart-wrap { position: relative; }
@@ -426,6 +454,21 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
 
 /* ---------- 桌面版（WinUI 3）：使用 MD3 不透明表面色 ---------- */
 html.native, html.native body { background: var(--md-surface); }
+
+/* ---------- 表格视图（直接编辑数据行） ---------- */
+.table-wrap { overflow-x: auto; }
+.md-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.md-table th {
+  text-align: left; font-weight: 500; color: var(--md-on-surface-variant);
+  padding: 10px 8px; border-bottom: 1px solid var(--md-outline-variant); white-space: nowrap;
+}
+.md-table td { padding: 4px 6px; border-bottom: 1px solid var(--md-outline-variant); vertical-align: middle; }
+.md-table .t-input { height: 36px; width: 100%; min-width: 96px; padding: 0 8px; font-size: 13px; border-radius: var(--md-xs); }
+.md-table td.center { text-align: center; }
+.md-table input[type="checkbox"] { width: 18px; height: 18px; padding: 0; accent-color: var(--md-primary); }
+.t-add { margin-top: 16px; }
+.t-del { height: 32px; padding: 0 12px; font-size: 12px; color: var(--md-error); }
+.t-del:hover { background: color-mix(in srgb, var(--md-error) 10%, transparent); }
 
 /* ---------- 响应式 ---------- */
 @media (max-width: 1180px) {

@@ -102,8 +102,8 @@ CREATE INDEX IF NOT EXISTS idx_items_ledger ON items(ledger_id);";
 
     private void Seed(SqliteConnection conn)
     {
-        var demo = new LedgerDto { Name = "示例数据", PeriodStart = "2026-01", PeriodEnd = "2026-12" };
-        var mine = new LedgerDto { Name = "我的账单", PeriodStart = "2026-01", PeriodEnd = "2026-12" };
+        var demo = new LedgerDto { Name = "示例数据", PeriodStart = "2026-01-01", PeriodEnd = "2026-12-31" };
+        var mine = new LedgerDto { Name = "我的账单", PeriodStart = "2026-01-01", PeriodEnd = "2026-12-31" };
         var demoId = InsertLedger(conn, demo);
         InsertLedger(conn, mine);
 
@@ -219,7 +219,7 @@ CREATE INDEX IF NOT EXISTS idx_items_ledger ON items(ledger_id);";
 
     public LedgerDto CreateLedger(string name)
     {
-        var l = new LedgerDto { Name = name, PeriodStart = "2026-01", PeriodEnd = "2026-12" };
+        var l = new LedgerDto { Name = name, PeriodStart = "2026-01-01", PeriodEnd = "2026-12-31" };
         using var conn = Open();
         l.Id = InsertLedger(conn, l);
         return l;

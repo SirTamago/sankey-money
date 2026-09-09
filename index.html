@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=7" />
+  <link rel="stylesheet" href="styles.css?v=10" />
 </head>
 <body>
   <div id="app">
@@ -43,6 +43,7 @@
         <nav class="tabs">
           <button class="tab active" data-tab="sankey">桑基图</button>
           <button class="tab" data-tab="calendar">日历</button>
+          <button class="tab" data-tab="table">表格</button>
         </nav>
 
         <!-- 桑基图视图 -->
@@ -55,12 +56,12 @@
             </div>
             <div class="field">
               <label>月份</label>
-              <input type="month" id="modeMonth" />
+              <div id="modeMonth"></div>
             </div>
             <div class="field" id="periodFields" hidden>
-              <label>起</label><input type="month" id="periodStart" />
+              <label>起</label><div id="periodStart"></div>
               <span class="sep">→</span>
-              <label>止</label><input type="month" id="periodEnd" />
+              <label>止</label><div id="periodEnd"></div>
             </div>
             <button id="btnExportPng" class="btn">导出图 PNG</button>
           </div>
@@ -76,7 +77,7 @@
         <section id="view-calendar" class="view" hidden>
           <div class="control-row">
             <button id="calPrev" class="btn">◀ 上月</button>
-            <input type="month" id="calMonth" />
+            <div id="calMonth"></div>
             <button id="calNext" class="btn">下月 ▶</button>
             <button id="calToday" class="btn btn-ghost">今天</button>
           </div>
@@ -85,6 +86,11 @@
             <div id="calGrid" class="cal-grid"></div>
           </div>
           <div id="dayDetail" class="day-detail"></div>
+        </section>
+
+        <!-- 表格视图：直接编辑 SQLite 行 -->
+        <section id="view-table" class="view" hidden>
+          <div id="tableWrap" class="table-wrap"></div>
         </section>
       </main>
     </div>
@@ -115,13 +121,13 @@
         </div>
 
         <div class="grid-2" id="schedRecurring">
-          <div class="field"><label>开始日期</label><input id="fStart" type="date" /></div>
-          <div class="field"><label>结束日期（留空 = 永不结束）</label><input id="fEnd" type="date" /></div>
+          <div class="field"><label>开始日期</label><div id="fStart"></div></div>
+          <div class="field"><label>结束日期（留空 = 永不结束）</label><div id="fEnd"></div></div>
           <div class="field"><label>每月几号 (1–31)</label><input id="fDay" type="number" min="1" max="31" placeholder="1" /></div>
         </div>
 
-        <div class="field" id="schedOneoff" hidden><label>日期</label><input id="fDate" type="date" /></div>
-        <div class="field" id="schedMonthly" hidden><label>归属月份</label><input id="fMonth" type="month" /></div>
+        <div class="field" id="schedOneoff" hidden><label>日期</label><div id="fDate"></div></div>
+        <div class="field" id="schedMonthly" hidden><label>归属月份</label><div id="fMonth"></div></div>
         <div id="fPeriodHint" class="period-hint" hidden></div>
 
         <div class="field"><label>备注</label><input id="fNote" placeholder="选填" /></div>
@@ -135,6 +141,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>

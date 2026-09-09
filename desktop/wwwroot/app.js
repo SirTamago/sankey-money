@@ -24,6 +24,21 @@ function monthsBetween(start, end) {
   return out;
 }
 
+/* 把 "YYYY-MM" 或空值规范成 "YYYY-MM-DD" 的起止日期 */
+function normalizePeriod(p) {
+  const def = { start: "2026-01-01", end: "2026-12-31" };
+  if (!p) return { start: def.start, end: def.end };
+  const norm = (v, isEnd) => {
+    if (!v) return isEnd ? def.end : def.start;
+    if (String(v).length === 7) {
+      const [y, m] = v.split("-").map(Number);
+      return isEnd ? ymdFrom(y, m, daysIn(y, m)) : ymdFrom(y, m, 1);
+    }
+    return v;
+  };
+  return { start: norm(p.start, false), end: norm(p.end, true) };
+}
+
 /* 颜色 */
 const PALETTE = ["#D0BCFF", "#CCC2DC", "#EFB8C8", "#8FD9A8", "#FFB77C", "#9FC9FF", "#F6BD16", "#B0A7C9", "#80CBC4", "#F2B8B5"];
 const colorMap = new Map();
@@ -100,8 +115,8 @@ function lsSeed() {
   return {
     activeId: 1,
     ledgers: [
-      { id: 1, name: "示例数据", periodStart: "2026-01", periodEnd: "2026-12", items: demoItems() },
-      { id: 2, name: "我的账单", periodStart: "2026-01", periodEnd: "2026-12", items: [] },
+      { id: 1, name: "示例数据", periodStart: "2026-01-01", periodEnd: "2026-12-31", items: demoItems() },
+      { id: 2, name: "我的账单", periodStart: "2026-01-01", periodEnd: "2026-12-31", items: [] },
     ]
   };
 }
@@ -123,7 +138,7 @@ const store = {
     if (HAS_NATIVE) return JSON.parse(await nativeCall("CreateLedger", name));
     const d = lsData();
     const nid = Math.max(0, ...d.ledgers.map(l => l.id)) + 1;
-    const l = { id: nid, name, periodStart: "2026-01", periodEnd: "2026-12", items: [] };
+    const l = { id: nid, name, periodStart: "2026-01-01", periodEnd: "2026-12-31", items: [] };
     d.ledgers.push(l); d.activeId = nid; lsWrite(d);
     return { id: nid, name, periodStart: l.periodStart, periodEnd: l.periodEnd };
   },
@@ -251,33 +266,127 @@ class MdSelect {
   }
 }
 
+/* ================= MD3 日期 / 月份选择器 ================= */
+class MdDatePicker {
+  constructor(host, mode, onChange) {
+    this.host = host;
+    this.mode = mode === "month" ? "month" : "date";
+    this.onChange = onChange;
+    this.value = null;
+    this.view = new Date();
+    this.host.classList.add("md-datepicker");
+    this.host.innerHTML =
+      '<button type="button" class="md-select-trigger">' +
+      '<span class="md-select-label"></span>' +
+      '<span class="md-dp-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg></span>' +
+      '</button>' +
+      '<div class="md-dp-popup" hidden></div>';
+    this.trigger = this.host.querySelector(".md-select-trigger");
+    this.labelEl = this.host.querySelector(".md-select-label");
+    this.popup = this.host.querySelector(".md-dp-popup");
+    this.trigger.addEventListener("click", (e) => { e.stopPropagation(); this.toggle(); });
+    this.popup.addEventListener("click", (e) => e.stopPropagation());
+    document.addEventListener("click", () => this.close());
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") this.close(); });
+    window.addEventListener("resize", () => this.close());
+    window.addEventListener("scroll", () => this.close(), true);
+  }
+  setValue(v) {
+    this.value = v || null;
+    if (this.value) this.view = new Date(this.mode === "month" ? this.value + "-01" : this.value);
+    this.updateLabel();
+  }
+  updateLabel() { this.labelEl.textContent = this.value || ""; }
+  toggle() { this.popup.hidden ? this.open() : this.close(); }
+  open() {
+    if (this.value) this.view = new Date(this.mode === "month" ? this.value + "-01" : this.value);
+    this.render();
+    const r = this.trigger.getBoundingClientRect();
+    const popW = 300, popH = this.mode === "month" ? 300 : 340;
+    const below = window.innerHeight - r.bottom - 8;
+    const openUp = below < popH && r.top > below;
+    this.popup.style.left = Math.max(8, Math.min(r.left, window.innerWidth - popW - 8)) + "px";
+    this.popup.style.width = popW + "px";
+    if (openUp) { this.popup.style.top = "auto"; this.popup.style.bottom = (window.innerHeight - r.top + 4) + "px"; this.popup.style.transformOrigin = "bottom center"; }
+    else { this.popup.style.bottom = "auto"; this.popup.style.top = (r.bottom + 4) + "px"; this.popup.style.transformOrigin = "top center"; }
+    this.popup.hidden = false;
+    this.trigger.classList.add("open");
+    requestAnimationFrame(() => this.popup.classList.add("open"));
+  }
+  close() {
+    if (this.popup.hidden) return;
+    this.popup.classList.remove("open");
+    this.trigger.classList.remove("open");
+    clearTimeout(this._t);
+    this._t = setTimeout(() => { if (!this.popup.classList.contains("open")) this.popup.hidden = true; }, 150);
+  }
+  render() {
+    const y = this.view.getFullYear(), m = this.view.getMonth();
+    let html = '<div class="md-dp-head">' +
+      '<button type="button" class="md-dp-nav" data-nav="-1">‹</button>' +
+      '<span class="md-dp-title">' + y + ' 年 ' + (m + 1) + ' 月</span>' +
+      '<button type="button" class="md-dp-nav" data-nav="1">›</button></div>';
+    if (this.mode === "month") {
+      html += '<div class="md-dp-months">' + Array.from({ length: 12 }, (_, i) => i + 1).map(mm =>
+        `<button type="button" class="md-dp-month ${mm - 1 === m ? "sel" : ""}" data-month="${mm}">${mm} 月</button>`).join("") + '</div>';
+    } else {
+      html += '<div class="md-dp-week">' + ["一", "二", "三", "四", "五", "六", "日"].map(d => `<span>${d}</span>`).join("") + '</div>';
+      const first = (new Date(y, m, 1).getDay() + 6) % 7;
+      const dim = daysIn(y, m + 1);
+      const today = todayYmd();
+      let cells = "";
+      for (let i = 0; i < first; i++) cells += '<span class="md-dp-day empty"></span>';
+      for (let d = 1; d <= dim; d++) {
+        const date = ymdFrom(y, m + 1, d);
+        cells += `<button type="button" class="md-dp-day ${date === this.value ? "sel" : ""} ${date === today ? "today" : ""}" data-date="${date}">${d}</button>`;
+      }
+      html += '<div class="md-dp-days">' + cells + '</div>';
+    }
+    this.popup.innerHTML = html;
+    this.popup.querySelectorAll("[data-nav]").forEach(b => b.addEventListener("click", () => {
+      this.view = new Date(y, m + Number(b.dataset.nav), 1);
+      this.render();
+    }));
+    this.popup.querySelectorAll("[data-date]").forEach(b => b.addEventListener("click", () => this.select(b.dataset.date)));
+    this.popup.querySelectorAll("[data-month]").forEach(b => b.addEventListener("click", () => this.select(ymdFrom(y, Number(b.dataset.month), 1).slice(0, 7))));
+  }
+  select(v) {
+    this.value = v;
+    this.updateLabel();
+    this.close();
+    if (this.onChange) this.onChange(v);
+  }
+}
+
 /* ================= 应用状态 ================= */
 let ledgers = [];
 let activeLedgerId = null;
-let state = { ledgerId: null, period: { start: "2026-01", end: "2026-12" }, items: [] };
+let state = { ledgerId: null, period: { start: "2026-01-01", end: "2026-12-31" }, items: [] };
 let editingId = null;
 let selectedDate = todayYmd();
 let fadeTimer = null;
 let resizeRaf = null;
 let ledgerSel = null, kindSel = null, schedSel = null;
+let modeMonthPick = null, calMonthPick = null, periodStartPick = null, periodEndPick = null;
+let fStartPick = null, fEndPick = null, fDatePick = null, fMonthPick = null;
 
 /* ================= 排期展开引擎 ================= */
-function monthlyOccurrence(item, month) {
+/* 统计项目在 [startDate, endDate] 区间内的发生次数 */
+function occurrencesInRange(item, startDate, endDate) {
   const s = item.schedule;
-  if (s.type === "monthly") return s.month === month;
-  if (s.type === "oneoff") return ymOf(s.date) === month;
-  if (s.type === "recurring") {
+  if (s.type === "oneoff") return (s.date >= startDate && s.date <= endDate) ? 1 : 0;
+  if (s.type === "monthly") return (s.month >= ymOf(startDate) && s.month <= ymOf(endDate)) ? 1 : 0;
+  let count = 0;
+  const months = monthsBetween(ymOf(startDate), ymOf(endDate));
+  for (const month of months) {
     const [y, m] = month.split("-").map(Number);
     const occ = ymdFrom(y, m, clampDay(y, m, s.dayOfMonth));
-    if (occ < s.start) return false;
-    if (s.end && occ > s.end) return false;
-    return true;
+    if (occ < s.start) continue;
+    if (s.end && occ > s.end) continue;
+    if (occ < startDate || occ > endDate) continue;
+    count++;
   }
-  return false;
-}
-
-function itemAmountInMonth(item, month) {
-  return monthlyOccurrence(item, month) ? item.amount : 0;
+  return count;
 }
 
 function itemsOnDate(dateStr) {
@@ -305,17 +414,14 @@ function pruneZero(nodes, links) {
   return { nodes: nodes.filter(n => keep.has(n.name) && connected.has(n.name)), links: keptLinks };
 }
 
-function buildSankeyMonths(months) {
+function buildSankeyRange(startDate, endDate) {
   const income = {}, expense = {}, inCnt = {}, exCnt = {};
   let totalIncome = 0, totalExpense = 0;
   for (const it of state.items) {
     if (!it.enabled) continue;
-    let amt = 0, cnt = 0;
-    for (const month of months) {
-      const a = itemAmountInMonth(it, month);
-      if (a > 0) { amt += a; cnt++; }
-    }
+    const cnt = occurrencesInRange(it, startDate, endDate);
     if (cnt === 0) continue;
+    const amt = cnt * it.amount;
     const label = it.category || it.name;
     if (it.kind === "income") {
       income[label] = (income[label] || 0) + amt;
@@ -551,19 +657,20 @@ function bindSankeyHover(svgEl, container) {
   });
 }
 
-function currentMonthsForSankey() {
+function currentRangeForSankey() {
   const mode = $(".seg#sankeyMode .active").dataset.mode;
   if (mode === "overall") {
-    const s = $("#periodStart").value, e = $("#periodEnd").value;
-    return { label: `整体 · ${s} ~ ${e}`, months: monthsBetween(s, e) };
+    const s = state.period.start, e = state.period.end;
+    return { label: `整体 · ${s} ~ ${e}`, start: s, end: e };
   }
-  const m = $("#modeMonth").value || currentMonth();
-  return { label: `单月 · ${m}`, months: [m] };
+  const m = (modeMonthPick && modeMonthPick.value) || currentMonth();
+  const [y, mo] = m.split("-").map(Number);
+  return { label: `单月 · ${m}`, start: ymdFrom(y, mo, 1), end: ymdFrom(y, mo, daysIn(y, mo)) };
 }
 
 function renderSankey() {
-  const { label, months } = currentMonthsForSankey();
-  const data = buildSankeyMonths(months);
+  const { label, start, end } = currentRangeForSankey();
+  const data = buildSankeyRange(start, end);
   $("#sankeyTitle").textContent = label;
   renderMetrics(data);
   if (data.empty) {
@@ -590,7 +697,7 @@ function renderMetrics(d) {
 function renderCalendar() { renderCalendarGrid(); renderDayDetail(); }
 
 function renderCalendarGrid() {
-  const month = $("#calMonth").value || currentMonth();
+  const month = (calMonthPick && calMonthPick.value) || currentMonth();
   let [y, m] = month.split("-").map(Number);
   if (!selectedDate || ymOf(selectedDate) !== month) selectedDate = ymdFrom(y, m, 1);
   const weekDays = ["一", "二", "三", "四", "五", "六", "日"];
@@ -647,14 +754,8 @@ function itemPeriodTotal(it) {
   if (s.type === "oneoff") return { label: s.date, count: 1, total: it.amount };
   if (s.type === "monthly") return { label: `按月手动 ${s.month}`, count: 1, total: it.amount };
   const winEnd = s.end || state.period.end;
-  const winLabel = s.end ? `${s.start} ~ ${s.end}` : `${s.start} ~ ${winEnd}（当前整体区间）`;
-  let count = 0;
-  const months = monthsBetween(ymOf(s.start), winEnd);
-  for (const month of months) {
-    const [y, m] = month.split("-").map(Number);
-    const occ = ymdFrom(y, m, clampDay(y, m, s.dayOfMonth));
-    if (occ >= s.start && occ <= (s.end || `${winEnd}-31`)) count++;
-  }
+  const winLabel = s.end ? `${s.start} ~ ${s.end}` : `${s.start} ~ ${winEnd}（当前区间）`;
+  const count = occurrencesInRange(it, s.start, winEnd);
   return { label: winLabel, count, total: count * it.amount };
 }
 
@@ -737,7 +838,80 @@ function renderDayDetail() {
   $("#dayAdd").addEventListener("click", () => openForm(null, { type: "oneoff", date: selectedDate }));
 }
 
-function renderAll() { renderCatDatalist(); renderItemList(); renderCalendar(); renderSankey(); renderLedgerSelect(); }
+function renderAll() { renderCatDatalist(); renderItemList(); renderCalendar(); renderSankey(); renderLedgerSelect(); renderTable(); }
+
+/* ================= 表格视图（直接编辑 SQLite 行） ================= */
+function renderTable() {
+  const wrap = $("#tableWrap");
+  if (!wrap) return;
+  const kindOpts = ["income", "expense", "loan"];
+  const schedOpts = [["recurring", "重复"], ["oneoff", "一次性"], ["monthly", "按月"]];
+  let html = '<table class="md-table"><thead><tr>' +
+    '<th>名称</th><th>类型</th><th>分类</th><th>金额</th><th>启用</th><th>排期</th>' +
+    '<th>开始日期</th><th>结束日期</th><th>每月几号</th><th>日期</th><th>归属月份</th><th>备注</th><th></th>' +
+    '</tr></thead><tbody>';
+  state.items.forEach((it, idx) => {
+    const s = it.schedule || {};
+    html += `<tr data-idx="${idx}">` +
+      `<td><input class="t-input" data-f="name" value="${escapeHtml(it.name)}"></td>` +
+      `<td><select class="t-input" data-f="kind">${kindOpts.map(k => `<option value="${k}" ${it.kind === k ? "selected" : ""}>${KIND_LABEL[k]}</option>`).join("")}</select></td>` +
+      `<td><input class="t-input" data-f="category" value="${escapeHtml(it.category || "")}"></td>` +
+      `<td><input class="t-input" type="number" step="0.01" data-f="amount" value="${it.amount}"></td>` +
+      `<td class="center"><input type="checkbox" data-f="enabled" ${it.enabled ? "checked" : ""}></td>` +
+      `<td><select class="t-input" data-f="sched_type">${schedOpts.map(([v, l]) => `<option value="${v}" ${s.type === v ? "selected" : ""}>${l}</option>`).join("")}</select></td>` +
+      `<td><input class="t-input" type="date" data-f="start" value="${s.start || ""}"></td>` +
+      `<td><input class="t-input" type="date" data-f="end" value="${s.end || ""}"></td>` +
+      `<td><input class="t-input" type="number" min="1" max="31" data-f="day" value="${s.dayOfMonth == null ? "" : s.dayOfMonth}"></td>` +
+      `<td><input class="t-input" type="date" data-f="date" value="${s.date || ""}"></td>` +
+      `<td><input class="t-input" type="month" data-f="month" value="${s.month || ""}"></td>` +
+      `<td><input class="t-input" data-f="note" value="${escapeHtml(it.note || "")}"></td>` +
+      `<td><button class="btn t-del" data-del="${idx}">删除</button></td>` +
+      '</tr>';
+  });
+  html += '</tbody></table>';
+  html += '<button class="btn btn-primary t-add" id="tableAdd">＋ 新增行</button>';
+  wrap.innerHTML = html;
+
+  wrap.querySelectorAll("tr[data-idx]").forEach(tr => {
+    const idx = Number(tr.dataset.idx);
+    tr.querySelectorAll("[data-f]").forEach(el => {
+      el.addEventListener("change", () => applyTableCell(idx, el.dataset.f, el));
+    });
+  });
+  wrap.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => {
+    state.items.splice(Number(b.dataset.del), 1);
+    afterMutate();
+  }));
+  $("#tableAdd").addEventListener("click", () => {
+    state.items.push(mkItem("新项目", "expense", "其他支出", 0, { type: "recurring", start: todayYmd(), end: null, dayOfMonth: 1 }));
+    afterMutate();
+  });
+}
+
+function applyTableCell(idx, field, el) {
+  const it = state.items[idx];
+  if (!it) return;
+  if (field === "name") it.name = el.value;
+  else if (field === "kind") it.kind = el.value;
+  else if (field === "category") it.category = el.value;
+  else if (field === "amount") it.amount = Number(el.value) || 0;
+  else if (field === "enabled") it.enabled = el.checked;
+  else if (field === "note") it.note = el.value;
+  else {
+    const s = it.schedule;
+    if (field === "sched_type") s.type = el.value;
+    else if (field === "start") s.start = el.value || null;
+    else if (field === "end") s.end = el.value || null;
+    else if (field === "day") s.dayOfMonth = el.value ? Number(el.value) : null;
+    else if (field === "date") s.date = el.value || null;
+    else if (field === "month") s.month = el.value || null;
+  }
+  persist();
+  renderSankey();
+  renderCalendarGrid();
+  renderItemList();
+  renderCatDatalist();
+}
 
 function afterMutate() { persist(); renderAll(); }
 
@@ -780,7 +954,7 @@ function renderLedgerSelect() {
 
 async function loadActiveLedger() {
   const l = await store.get(activeLedgerId);
-  state = { ledgerId: l.id, period: { start: l.periodStart, end: l.periodEnd }, items: l.items || [] };
+  state = { ledgerId: l.id, period: normalizePeriod({ start: l.periodStart, end: l.periodEnd }), items: l.items || [] };
   try { localStorage.setItem(LS_ACTIVE, String(l.id)); } catch (e) { /* ignore */ }
   syncPeriodInputs();
   renderAll();
@@ -827,17 +1001,17 @@ function updatePeriodHint() {
   const type = schedSel ? schedSel.value : "recurring";
   if (type !== "recurring") { hint.hidden = true; return; }
   const amount = Number($("#fAmount").value) || 0;
-  const start = $("#fStart").value;
+  const start = fStartPick ? fStartPick.value : null;
   const day = Number($("#fDay").value) || 1;
-  const end = $("#fEnd").value || null;
+  const end = (fEndPick && fEndPick.value) || null;
   if (!start) { hint.hidden = true; return; }
-  const winEnd = end ? ymOf(end) : state.period.end;
+  const winEnd = end || state.period.end;
   let count = 0;
-  const months = monthsBetween(ymOf(start), winEnd);
+  const months = monthsBetween(ymOf(start), ymOf(winEnd));
   for (const month of months) {
     const [y, m] = month.split("-").map(Number);
     const occ = ymdFrom(y, m, clampDay(y, m, day));
-    if (occ >= start && occ <= (end || `${winEnd}-31`)) count++;
+    if (occ >= start && occ <= winEnd) count++;
   }
   const total = count * amount;
   hint.hidden = false;
@@ -853,11 +1027,11 @@ function openForm(item, prefill) {
   $("#fCategory").value = item ? (item.category || "") : "";
   const s = item ? item.schedule : (prefill || { type: "recurring" });
   schedSel.setValue(s.type);
-  $("#fStart").value = s.type === "recurring" ? (s.start || "") : "";
-  $("#fEnd").value = s.type === "recurring" ? (s.end || "") : "";
+  fStartPick.setValue(s.type === "recurring" ? (s.start || "") : "");
+  fEndPick.setValue(s.type === "recurring" ? (s.end || "") : "");
   $("#fDay").value = s.type === "recurring" ? (s.dayOfMonth || 1) : "";
-  $("#fDate").value = s.type === "oneoff" ? (s.date || (prefill && prefill.date) || "") : "";
-  $("#fMonth").value = s.type === "monthly" ? (s.month || currentMonth()) : "";
+  fDatePick.setValue(s.type === "oneoff" ? (s.date || (prefill && prefill.date) || "") : "");
+  fMonthPick.setValue(s.type === "monthly" ? (s.month || currentMonth()) : "");
   $("#fNote").value = item ? (item.note || "") : "";
   $("#fEnabled").checked = item ? item.enabled : true;
   showSchedFields(s.type);
@@ -878,18 +1052,18 @@ function submitForm(e) {
   const type = schedSel.value;
   let schedule;
   if (type === "recurring") {
-    const start = $("#fStart").value;
-    const end = $("#fEnd").value || null;
+    const start = fStartPick.value;
+    const end = fEndPick.value || null;
     const day = $("#fDay").value ? Number($("#fDay").value) : 1;
     if (!start || !day) return alert("请选择开始日期并填写「每月几号」");
     if (end && end < start) return alert("结束日期不能早于开始日期");
     schedule = { type: "recurring", start, end, dayOfMonth: day };
   } else if (type === "oneoff") {
-    const date = $("#fDate").value;
+    const date = fDatePick.value;
     if (!date) return alert("请选择日期");
     schedule = { type: "oneoff", date };
   } else {
-    const month = $("#fMonth").value;
+    const month = fMonthPick.value;
     if (!month) return alert("请选择归属月份");
     schedule = { type: "monthly", month };
   }
@@ -943,8 +1117,8 @@ function exportPng() {
 }
 
 function syncPeriodInputs() {
-  $("#periodStart").value = state.period.start;
-  $("#periodEnd").value = state.period.end;
+  periodStartPick.setValue(state.period.start);
+  periodEndPick.setValue(state.period.end);
 }
 
 /* ================= 视图切换 / 事件绑定 ================= */
@@ -952,7 +1126,9 @@ function switchTab(tab) {
   $$(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
   $("#view-sankey").hidden = tab !== "sankey";
   $("#view-calendar").hidden = tab !== "calendar";
+  $("#view-table").hidden = tab !== "table";
   if (tab === "sankey" && lastSankeyData) setTimeout(() => renderSankeySvg(lastSankeyData, { fade: false }), 0);
+  if (tab === "table") renderTable();
 }
 
 function bindEvents() {
@@ -960,7 +1136,7 @@ function bindEvents() {
   $("#btnSeed").addEventListener("click", () => {
     if (!confirm("用示例数据替换当前账单的全部项目？")) return;
     state.items = demoItems();
-    state.period = { start: "2026-01", end: "2026-12" };
+    state.period = { start: "2026-01-01", end: "2026-12-31" };
     syncPeriodInputs();
     afterMutate();
   });
@@ -982,7 +1158,7 @@ function bindEvents() {
   $("#btnCancel").addEventListener("click", closeForm);
   $("#itemForm").addEventListener("submit", submitForm);
   $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeForm(); });
-  ["fAmount", "fDay", "fStart", "fEnd"].forEach(fid => $("#" + fid).addEventListener("input", updatePeriodHint));
+  ["fAmount", "fDay"].forEach(fid => $("#" + fid).addEventListener("input", updatePeriodHint));
 
   $("#btnNewLedger").addEventListener("click", newLedger);
   $("#btnRenameLedger").addEventListener("click", renameLedger);
@@ -1000,21 +1176,16 @@ function bindEvents() {
     renderSankey();
   }));
 
-  $("#modeMonth").addEventListener("change", renderSankey);
-  $("#periodStart").addEventListener("change", () => { state.period.start = $("#periodStart").value; persist(); renderSankey(); });
-  $("#periodEnd").addEventListener("change", () => { state.period.end = $("#periodEnd").value; persist(); renderSankey(); });
-
   const shift = (n) => {
-    let [y, m] = ($("#calMonth").value || currentMonth()).split("-").map(Number);
+    let [y, m] = ((calMonthPick && calMonthPick.value) || currentMonth()).split("-").map(Number);
     m += n; while (m < 1) { m += 12; y--; } while (m > 12) { m -= 12; y++; }
-    $("#calMonth").value = `${y}-${pad(m)}`;
+    calMonthPick.setValue(`${y}-${pad(m)}`);
     selectedDate = ymdFrom(y, m, 1);
     renderCalendar();
   };
   $("#calPrev").addEventListener("click", () => shift(-1));
   $("#calNext").addEventListener("click", () => shift(1));
-  $("#calToday").addEventListener("click", () => { $("#calMonth").value = currentMonth(); selectedDate = todayYmd(); renderCalendar(); });
-  $("#calMonth").addEventListener("change", () => { selectedDate = null; renderCalendar(); });
+  $("#calToday").addEventListener("click", () => { calMonthPick.setValue(currentMonth()); selectedDate = todayYmd(); renderCalendar(); });
 
   window.addEventListener("resize", () => {
     if (resizeRaf) return;
@@ -1026,9 +1197,18 @@ function bindEvents() {
 }
 
 async function init() {
-  $("#modeMonth").value = currentMonth();
-  $("#calMonth").value = currentMonth();
   bindEvents();
+
+  modeMonthPick = new MdDatePicker($("#modeMonth"), "month", () => renderSankey());
+  calMonthPick = new MdDatePicker($("#calMonth"), "month", () => { selectedDate = null; renderCalendar(); });
+  periodStartPick = new MdDatePicker($("#periodStart"), "date", (v) => { state.period.start = v; persist(); renderSankey(); });
+  periodEndPick = new MdDatePicker($("#periodEnd"), "date", (v) => { state.period.end = v; persist(); renderSankey(); });
+  fStartPick = new MdDatePicker($("#fStart"), "date", () => updatePeriodHint());
+  fEndPick = new MdDatePicker($("#fEnd"), "date", () => updatePeriodHint());
+  fDatePick = new MdDatePicker($("#fDate"), "date");
+  fMonthPick = new MdDatePicker($("#fMonth"), "month");
+  modeMonthPick.setValue(currentMonth());
+  calMonthPick.setValue(currentMonth());
 
   ledgerSel = new MdSelect($("#ledgerSelect"), async (v) => {
     activeLedgerId = /^\d+$/.test(String(v)) ? Number(v) : v;
