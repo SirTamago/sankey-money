@@ -1,0 +1,17 @@
+# 统一换行符：仓库内文本文件按 LF 存储，检出时由各平台自行处理
+* text=auto eol=lf
+
+# Windows 专有文件保留 CRLF
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.cs  text eol=crlf
+
+# 二进制
+*.ico binary
+*.png binary
+*.jpg binary
+*.zip binary
+*.exe binary
+*.dll binary
+*.db binary
