@@ -24,8 +24,23 @@ function monthsBetween(start, end) {
   return out;
 }
 
+/* 把 "YYYY-MM" 或空值规范成 "YYYY-MM-DD" 的起止日期 */
+function normalizePeriod(p) {
+  const def = { start: "2026-01-01", end: "2026-12-31" };
+  if (!p) return { start: def.start, end: def.end };
+  const norm = (v, isEnd) => {
+    if (!v) return isEnd ? def.end : def.start;
+    if (String(v).length === 7) {
+      const [y, m] = v.split("-").map(Number);
+      return isEnd ? ymdFrom(y, m, daysIn(y, m)) : ymdFrom(y, m, 1);
+    }
+    return v;
+  };
+  return { start: norm(p.start, false), end: norm(p.end, true) };
+}
+
 /* 颜色 */
-const PALETTE = ["#61ddaa", "#5b8ff9", "#f6903d", "#ea7baa", "#6dc8ec", "#9f7bff", "#f6bd16", "#f08bb4", "#34c6b8", "#00b3ff"];
+const PALETTE = ["#D0BCFF", "#CCC2DC", "#EFB8C8", "#8FD9A8", "#FFB77C", "#9FC9FF", "#F6BD16", "#B0A7C9", "#80CBC4", "#F2B8B5"];
 const colorMap = new Map();
 let colorIdx = 0;
 function colorFor(key) {
@@ -41,8 +56,8 @@ const fmtShort = (n) => Number(n || 0).toLocaleString("zh-CN", { maximumFraction
 /* 分类 / 类型 */
 const KIND_LABEL = { income: "收入", expense: "支出", loan: "借贷/分期" };
 const CATEGORY_DEFAULTS = ["工资", "兼职", "补贴", "借入", "固定开销", "分期还款", "房贷/车贷", "日常消费", "数码产品"];
-const TYPE_COLOR = { income: "#36cfc9", expense: "#f6903d", loan: "#ff4d4f" };
-const FONT_STACK = '"Segoe UI Variable Text","Segoe UI","Microsoft YaHei UI","Noto Sans SC","PingFang SC",system-ui,sans-serif';
+const TYPE_COLOR = { income: "#8FD9A8", expense: "#FFB77C", loan: "#F2B8B5" };
+const FONT_STACK = '"Roboto","Noto Sans SC","Microsoft YaHei UI",system-ui,sans-serif';
 
 /* ================= 存储层（桌面版走原生 SQLite，浏览器回退 localStorage） ================= */
 const HAS_NATIVE = !!(window.chrome && window.chrome.webview && typeof window.chrome.webview.postMessage === "function");
@@ -74,6 +89,29 @@ if (HAS_NATIVE) {
   });
 }
 
+/* 网页版：本地后端 API（server.py）。探测不到就回退 localStorage。 */
+let HAS_API = false;
+async function probeApi() {
+  if (HAS_NATIVE) return false;
+  try {
+    const r = await fetch("api/health", { cache: "no-store" });
+    if (!r.ok) return false;
+    return !!(await r.json()).ok;
+  } catch (e) { return false; }
+}
+async function api(method, path, body) {
+  const opt = { method, cache: "no-store" };
+  if (body !== undefined) { opt.headers = { "Content-Type": "application/json" }; opt.body = JSON.stringify(body); }
+  const r = await fetch(path, opt);
+  if (!r.ok) throw new Error(method + " " + path + " -> HTTP " + r.status);
+  const txt = await r.text();
+  return txt ? JSON.parse(txt) : null;
+}
+function downloadUrl(url) {
+  const a = document.createElement("a");
+  a.href = url; a.click();
+}
+
 const LS_KEY = "sankey-money-ledgers-v2";
 const LS_ACTIVE = "sankey-money-active";
 
@@ -100,8 +138,8 @@ function lsSeed() {
   return {
     activeId: 1,
     ledgers: [
-      { id: 1, name: "示例数据", periodStart: "2026-01", periodEnd: "2026-12", items: demoItems() },
-      { id: 2, name: "我的账单", periodStart: "2026-01", periodEnd: "2026-12", items: [] },
+      { id: 1, name: "示例数据", periodStart: "2026-01-01", periodEnd: "2026-12-31", items: demoItems() },
+      { id: 2, name: "我的账单", periodStart: "2026-01-01", periodEnd: "2026-12-31", items: [] },
     ]
   };
 }
@@ -110,10 +148,12 @@ function lsData() { let d = lsRead(); if (!d) { d = lsSeed(); lsWrite(d); } retu
 const store = {
   async list() {
     if (HAS_NATIVE) return JSON.parse(await nativeCall("ListLedgers"));
+    if (HAS_API) return await api("GET", "api/ledgers");
     return lsData().ledgers.map(l => ({ id: l.id, name: l.name, periodStart: l.periodStart, periodEnd: l.periodEnd, itemCount: (l.items || []).length }));
   },
   async get(idVal) {
     if (HAS_NATIVE) return JSON.parse(await nativeCall("GetLedger", idVal));
+    if (HAS_API) return await api("GET", "api/ledgers/" + idVal);
     const d = lsData();
     const l = d.ledgers.find(x => String(x.id) === String(idVal));
     if (!l) throw new Error("账单不存在");
@@ -121,37 +161,43 @@ const store = {
   },
   async create(name) {
     if (HAS_NATIVE) return JSON.parse(await nativeCall("CreateLedger", name));
+    if (HAS_API) return await api("POST", "api/ledgers", { name });
     const d = lsData();
     const nid = Math.max(0, ...d.ledgers.map(l => l.id)) + 1;
-    const l = { id: nid, name, periodStart: "2026-01", periodEnd: "2026-12", items: [] };
+    const l = { id: nid, name, periodStart: "2026-01-01", periodEnd: "2026-12-31", items: [] };
     d.ledgers.push(l); d.activeId = nid; lsWrite(d);
     return { id: nid, name, periodStart: l.periodStart, periodEnd: l.periodEnd };
   },
   async rename(idVal, name) {
     if (HAS_NATIVE) { await nativeCall("RenameLedger", idVal, name); return; }
+    if (HAS_API) { await api("PATCH", "api/ledgers/" + idVal, { name }); return; }
     const d = lsData();
     const l = d.ledgers.find(x => String(x.id) === String(idVal));
     if (l) { l.name = name; lsWrite(d); }
   },
   async remove(idVal) {
     if (HAS_NATIVE) { await nativeCall("DeleteLedger", idVal); return; }
+    if (HAS_API) { await api("DELETE", "api/ledgers/" + idVal); return; }
     const d = lsData();
     d.ledgers = d.ledgers.filter(x => String(x.id) !== String(idVal)); lsWrite(d);
   },
   async save(idVal, ps, pe, items) {
     if (HAS_NATIVE) { await nativeCall("SaveLedger", idVal, ps, pe, JSON.stringify(items)); return; }
+    if (HAS_API) { await api("PUT", "api/ledgers/" + idVal + "/items", { period_start: ps, period_end: pe, items }); return; }
     const d = lsData();
     const l = d.ledgers.find(x => String(x.id) === String(idVal));
     if (l) { l.periodStart = ps; l.periodEnd = pe; l.items = items; lsWrite(d); }
   },
   async exportCsv(idVal) {
     if (HAS_NATIVE) return await nativeCall("ExportCsv", idVal);
+    if (HAS_API) { downloadUrl("api/ledgers/" + idVal + "/export.csv"); return "saved:browser"; }
     const l = await store.get(idVal);
     downloadText(buildCsv(l), l.name + ".csv");
     return "saved:browser";
   },
   async exportSqlite(idVal) {
     if (HAS_NATIVE) return await nativeCall("ExportSqlite", idVal);
+    if (HAS_API) { downloadUrl("api/ledgers/" + idVal + "/export.sqlite"); return "saved:browser"; }
     return "unsupported";
   }
 };
@@ -176,32 +222,258 @@ function downloadText(text, filename) {
   URL.revokeObjectURL(a.href);
 }
 
+/* ================= MD3 下拉选单 ================= */
+class MdSelect {
+  constructor(host, onChange) {
+    this.host = host;
+    this.onChange = onChange;
+    this.options = [];
+    this.value = null;
+    this.host.classList.add("md-select");
+    this.host.innerHTML =
+      '<button type="button" class="md-select-trigger">' +
+      '<span class="md-select-label"></span>' +
+      '<span class="md-select-arrow"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">' +
+      '<path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>' +
+      '</button>' +
+      '<div class="md-menu" hidden></div>';
+    this.trigger = this.host.querySelector(".md-select-trigger");
+    this.labelEl = this.host.querySelector(".md-select-label");
+    this.menu = this.host.querySelector(".md-menu");
+    this.trigger.addEventListener("click", (e) => { e.stopPropagation(); this.toggle(); });
+    this._onDocClick = () => this.close();
+    this._onKey = (e) => { if (e.key === "Escape") this.close(); };
+    this._onMove = () => this.close();
+    document.addEventListener("click", this._onDocClick);
+    document.addEventListener("keydown", this._onKey);
+    window.addEventListener("resize", this._onMove);
+    window.addEventListener("scroll", this._onMove, true);
+  }
+  setOptions(opts) {
+    this.options = opts.slice();
+    if (this.value == null && opts.length) this.value = opts[0].value;
+    this.updateLabel();
+  }
+  setValue(v) { this.value = v; this.updateLabel(); }
+  updateLabel() {
+    const o = this.options.find(x => String(x.value) === String(this.value));
+    this.labelEl.textContent = o ? o.label : "";
+  }
+  toggle() { this.menu.hidden ? this.open() : this.close(); }
+  open() {
+    this.renderMenu();
+    const r = this.trigger.getBoundingClientRect();
+    const menuH = Math.min(300, this.options.length * 44 + 16);
+    const below = window.innerHeight - r.bottom - 8;
+    const openUp = below < menuH && r.top > below;
+    this.menu.style.left = r.left + "px";
+    this.menu.style.minWidth = r.width + "px";
+    if (openUp) { this.menu.style.top = "auto"; this.menu.style.bottom = (window.innerHeight - r.top + 4) + "px"; this.menu.style.transformOrigin = "bottom left"; }
+    else { this.menu.style.bottom = "auto"; this.menu.style.top = (r.bottom + 4) + "px"; this.menu.style.transformOrigin = "top left"; }
+    this.menu.hidden = false;
+    this.trigger.classList.add("open");
+    requestAnimationFrame(() => this.menu.classList.add("open"));
+  }
+  close() {
+    if (this.menu.hidden) return;
+    this.menu.classList.remove("open");
+    this.trigger.classList.remove("open");
+    clearTimeout(this._closeTimer);
+    this._closeTimer = setTimeout(() => { if (!this.menu.classList.contains("open")) this.menu.hidden = true; }, 150);
+  }
+  renderMenu() {
+    this.menu.innerHTML = this.options.map(o =>
+      `<button type="button" class="md-menu-item ${String(o.value) === String(this.value) ? "selected" : ""}" data-value="${svgEsc(String(o.value))}">${svgEsc(o.label)}</button>`
+    ).join("");
+    this.menu.querySelectorAll(".md-menu-item").forEach(el => {
+      el.addEventListener("click", (e) => { e.stopPropagation(); this.select(el.dataset.value); });
+    });
+  }
+  select(v) {
+    this.value = v;
+    this.updateLabel();
+    this.close();
+    if (this.onChange) this.onChange(v);
+  }
+}
+
+/* ================= MD3 日期 / 月份选择器 ================= */
+class MdDatePicker {
+  constructor(host, mode, onChange) {
+    this.host = host;
+    this.mode = mode === "month" ? "month" : "date";
+    this.onChange = onChange;
+    this.value = null;
+    this.view = new Date();
+    this.host.classList.add("md-datepicker");
+    this.host.innerHTML =
+      '<button type="button" class="md-select-trigger">' +
+      '<span class="md-select-label"></span>' +
+      '<span class="md-dp-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg></span>' +
+      '</button>' +
+      '<div class="md-dp-popup" hidden></div>';
+    this.trigger = this.host.querySelector(".md-select-trigger");
+    this.labelEl = this.host.querySelector(".md-select-label");
+    this.popup = this.host.querySelector(".md-dp-popup");
+    this.trigger.addEventListener("click", (e) => { e.stopPropagation(); this.toggle(); });
+    this.popup.addEventListener("click", (e) => e.stopPropagation());
+    document.addEventListener("click", () => this.close());
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") this.close(); });
+    window.addEventListener("resize", () => this.close());
+    window.addEventListener("scroll", () => this.close(), true);
+  }
+  setValue(v) {
+    this.value = v || null;
+    if (this.value) this.view = new Date(this.mode === "month" ? this.value + "-01" : this.value);
+    this.updateLabel();
+  }
+  updateLabel() { this.labelEl.textContent = this.value || ""; }
+  toggle() { this.popup.hidden ? this.open() : this.close(); }
+  open() {
+    if (this.value) this.view = new Date(this.mode === "month" ? this.value + "-01" : this.value);
+    this.render();
+    const r = this.trigger.getBoundingClientRect();
+    const popW = 300, popH = this.mode === "month" ? 300 : 340;
+    const below = window.innerHeight - r.bottom - 8;
+    const openUp = below < popH && r.top > below;
+    this.popup.style.left = Math.max(8, Math.min(r.left, window.innerWidth - popW - 8)) + "px";
+    this.popup.style.width = popW + "px";
+    if (openUp) { this.popup.style.top = "auto"; this.popup.style.bottom = (window.innerHeight - r.top + 4) + "px"; this.popup.style.transformOrigin = "bottom center"; }
+    else { this.popup.style.bottom = "auto"; this.popup.style.top = (r.bottom + 4) + "px"; this.popup.style.transformOrigin = "top center"; }
+    this.popup.hidden = false;
+    this.trigger.classList.add("open");
+    requestAnimationFrame(() => this.popup.classList.add("open"));
+  }
+  close() {
+    if (this.popup.hidden) return;
+    this.popup.classList.remove("open");
+    this.trigger.classList.remove("open");
+    clearTimeout(this._t);
+    this._t = setTimeout(() => { if (!this.popup.classList.contains("open")) this.popup.hidden = true; }, 150);
+  }
+  render() {
+    const y = this.view.getFullYear(), m = this.view.getMonth();
+    let html = '<div class="md-dp-head">' +
+      '<button type="button" class="md-dp-nav" data-nav="-1">‹</button>' +
+      '<span class="md-dp-title">' + y + ' 年 ' + (m + 1) + ' 月</span>' +
+      '<button type="button" class="md-dp-nav" data-nav="1">›</button></div>';
+    if (this.mode === "month") {
+      html += '<div class="md-dp-months">' + Array.from({ length: 12 }, (_, i) => i + 1).map(mm =>
+        `<button type="button" class="md-dp-month ${mm - 1 === m ? "sel" : ""}" data-month="${mm}">${mm} 月</button>`).join("") + '</div>';
+    } else {
+      html += '<div class="md-dp-week">' + ["一", "二", "三", "四", "五", "六", "日"].map(d => `<span>${d}</span>`).join("") + '</div>';
+      const first = (new Date(y, m, 1).getDay() + 6) % 7;
+      const dim = daysIn(y, m + 1);
+      const today = todayYmd();
+      let cells = "";
+      for (let i = 0; i < first; i++) cells += '<span class="md-dp-day empty"></span>';
+      for (let d = 1; d <= dim; d++) {
+        const date = ymdFrom(y, m + 1, d);
+        cells += `<button type="button" class="md-dp-day ${date === this.value ? "sel" : ""} ${date === today ? "today" : ""}" data-date="${date}">${d}</button>`;
+      }
+      html += '<div class="md-dp-days">' + cells + '</div>';
+    }
+    this.popup.innerHTML = html;
+    this.popup.querySelectorAll("[data-nav]").forEach(b => b.addEventListener("click", () => {
+      this.view = new Date(y, m + Number(b.dataset.nav), 1);
+      this.render();
+    }));
+    this.popup.querySelectorAll("[data-date]").forEach(b => b.addEventListener("click", () => this.select(b.dataset.date)));
+    this.popup.querySelectorAll("[data-month]").forEach(b => b.addEventListener("click", () => this.select(ymdFrom(y, Number(b.dataset.month), 1).slice(0, 7))));
+  }
+  select(v) {
+    this.value = v;
+    this.updateLabel();
+    this.close();
+    if (this.onChange) this.onChange(v);
+  }
+}
+
+/* ================= MD3 对话框（替换原生 alert/confirm/prompt） ================= */
+function mdDialog(opts) {
+  opts = opts || {};
+  return new Promise((resolve) => {
+    const host = $("#mdDialogHost");
+    const msgHtml = escapeHtml(opts.message || "").replace(/\n/g, "<br>");
+    host.innerHTML =
+      '<div class="md-scrim"></div>' +
+      '<div class="md-dialog">' +
+      (opts.title ? `<h2 class="md-dialog-title">${escapeHtml(opts.title)}</h2>` : "") +
+      `<div class="md-dialog-body">${msgHtml}</div>` +
+      (opts.input ? `<input class="md-dialog-input" value="${escapeHtml(opts.defaultValue || "")}">` : "") +
+      '<div class="md-dialog-actions">' +
+      (opts.input || opts.cancelText ? `<button type="button" class="btn md-dialog-cancel">${escapeHtml(opts.cancelText || "取消")}</button>` : "") +
+      `<button type="button" class="btn btn-primary md-dialog-ok ${opts.danger ? "danger" : ""}">${escapeHtml(opts.confirmText || "确定")}</button>` +
+      "</div></div>";
+    host.hidden = false;
+    requestAnimationFrame(() => host.classList.add("open"));
+    let done = false;
+    const cancelVal = opts.input ? null : false;
+    const close = (val) => {
+      if (done) return;
+      done = true;
+      document.removeEventListener("keydown", onKey);
+      host.classList.remove("open");
+      setTimeout(() => { host.hidden = true; host.innerHTML = ""; }, 160);
+      resolve(val);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") close(cancelVal);
+      else if (e.key === "Enter" && opts.input) {
+        const inp = host.querySelector(".md-dialog-input");
+        close(inp ? inp.value : "");
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    host.querySelector(".md-dialog-ok").addEventListener("click", () => {
+      if (opts.input) { const inp = host.querySelector(".md-dialog-input"); close(inp ? inp.value : ""); }
+      else close(true);
+    });
+    const cancelBtn = host.querySelector(".md-dialog-cancel");
+    if (cancelBtn) cancelBtn.addEventListener("click", () => close(cancelVal));
+    host.querySelector(".md-scrim").addEventListener("click", () => close(cancelVal));
+    const inp = host.querySelector(".md-dialog-input");
+    if (inp) { inp.focus(); inp.select(); }
+  });
+}
+function mdAlert(message, title) { return mdDialog({ title: title || "提示", message, confirmText: "知道了" }); }
+function mdConfirm(message, opts) {
+  opts = opts || {};
+  return mdDialog({ title: opts.title || "确认", message, confirmText: opts.confirmText || "确定", cancelText: "取消", danger: opts.danger });
+}
+function mdPrompt(message, defaultValue, title) {
+  return mdDialog({ title: title || "输入", message, input: true, defaultValue, confirmText: "确定", cancelText: "取消" });
+}
+
 /* ================= 应用状态 ================= */
 let ledgers = [];
 let activeLedgerId = null;
-let state = { ledgerId: null, period: { start: "2026-01", end: "2026-12" }, items: [] };
+let state = { ledgerId: null, period: { start: "2026-01-01", end: "2026-12-31" }, items: [] };
 let editingId = null;
 let selectedDate = todayYmd();
 let fadeTimer = null;
-let resizeTimer = null;
+let resizeRaf = null;
+let ledgerSel = null, kindSel = null, schedSel = null;
+let calMonthPick = null, periodStartPick = null, periodEndPick = null;
+let fStartPick = null, fEndPick = null, fDatePick = null, fMonthPick = null;
 
 /* ================= 排期展开引擎 ================= */
-function monthlyOccurrence(item, month) {
+/* 统计项目在 [startDate, endDate] 区间内的发生次数 */
+function occurrencesInRange(item, startDate, endDate) {
   const s = item.schedule;
-  if (s.type === "monthly") return s.month === month;
-  if (s.type === "oneoff") return ymOf(s.date) === month;
-  if (s.type === "recurring") {
+  if (s.type === "oneoff") return (s.date >= startDate && s.date <= endDate) ? 1 : 0;
+  if (s.type === "monthly") return (s.month >= ymOf(startDate) && s.month <= ymOf(endDate)) ? 1 : 0;
+  let count = 0;
+  const months = monthsBetween(ymOf(startDate), ymOf(endDate));
+  for (const month of months) {
     const [y, m] = month.split("-").map(Number);
     const occ = ymdFrom(y, m, clampDay(y, m, s.dayOfMonth));
-    if (occ < s.start) return false;
-    if (s.end && occ > s.end) return false;
-    return true;
+    if (occ < s.start) continue;
+    if (s.end && occ > s.end) continue;
+    if (occ < startDate || occ > endDate) continue;
+    count++;
   }
-  return false;
-}
-
-function itemAmountInMonth(item, month) {
-  return monthlyOccurrence(item, month) ? item.amount : 0;
+  return count;
 }
 
 function itemsOnDate(dateStr) {
@@ -229,17 +501,14 @@ function pruneZero(nodes, links) {
   return { nodes: nodes.filter(n => keep.has(n.name) && connected.has(n.name)), links: keptLinks };
 }
 
-function buildSankeyMonths(months) {
+function buildSankeyRange(startDate, endDate) {
   const income = {}, expense = {}, inCnt = {}, exCnt = {};
   let totalIncome = 0, totalExpense = 0;
   for (const it of state.items) {
     if (!it.enabled) continue;
-    let amt = 0, cnt = 0;
-    for (const month of months) {
-      const a = itemAmountInMonth(it, month);
-      if (a > 0) { amt += a; cnt++; }
-    }
+    const cnt = occurrencesInRange(it, startDate, endDate);
     if (cnt === 0) continue;
+    const amt = cnt * it.amount;
     const label = it.category || it.name;
     if (it.kind === "income") {
       income[label] = (income[label] || 0) + amt;
@@ -265,10 +534,10 @@ function buildSankeyMonths(months) {
     itemStyle: { color: colorFor("in:" + l), opacity: 0.92 }, usrLabel: l, usrCount: inCnt[l],
     label: { position: "left" }
   }));
-  nodes.push({ name: "总收入来源", value: totalIncome, depth: 1, itemStyle: { color: "#5b8ff9", opacity: 0.92 }, usrLabel: "总收入来源", label: { position: "top" } });
+  nodes.push({ name: "总收入来源", value: totalIncome, depth: 1, itemStyle: { color: "#D0BCFF", opacity: 0.92 }, usrLabel: "总收入来源", label: { position: "top" } });
   inLabels.forEach(l => links.push({ source: "IN_" + l, target: "总收入来源", value: income[l] }));
 
-  nodes.push({ name: "总计划支出", value: totalExpense, depth: 2, itemStyle: { color: "#f26d6d", opacity: 0.92 }, usrLabel: "总计划支出", label: { position: "top" } });
+  nodes.push({ name: "总计划支出", value: totalExpense, depth: 2, itemStyle: { color: "#EFB8C8", opacity: 0.92 }, usrLabel: "总计划支出", label: { position: "top" } });
   links.push({ source: "总收入来源", target: "总计划支出", value: totalExpense });
 
   exLabels.forEach(l => nodes.push({
@@ -279,10 +548,10 @@ function buildSankeyMonths(months) {
   exLabels.forEach(l => links.push({ source: "总计划支出", target: "EX_" + l, value: expense[l] }));
 
   if (surplus >= 0) {
-    nodes.push({ name: "结余/自由支配", value: surplus, depth: 2, itemStyle: { color: "#36cfc9", opacity: 0.92 }, usrLabel: "结余 / 自由支配", label: { position: "bottom" } });
+    nodes.push({ name: "结余/自由支配", value: surplus, depth: 2, itemStyle: { color: "#8FD9A8", opacity: 0.92 }, usrLabel: "结余 / 自由支配", label: { position: "bottom" } });
     links.push({ source: "总收入来源", target: "结余/自由支配", value: surplus });
   } else {
-    nodes.push({ name: "超支", value: -surplus, depth: 2, itemStyle: { color: "#ff4d4f", opacity: 0.92 }, usrLabel: "超支", label: { position: "bottom" } });
+    nodes.push({ name: "超支", value: -surplus, depth: 2, itemStyle: { color: "#F2B8B5", opacity: 0.92 }, usrLabel: "超支", label: { position: "bottom" } });
     links.push({ source: "总收入来源", target: "超支", value: -surplus });
   }
 
@@ -475,19 +744,14 @@ function bindSankeyHover(svgEl, container) {
   });
 }
 
-function currentMonthsForSankey() {
-  const mode = $(".seg#sankeyMode .active").dataset.mode;
-  if (mode === "overall") {
-    const s = $("#periodStart").value, e = $("#periodEnd").value;
-    return { label: `整体 · ${s} ~ ${e}`, months: monthsBetween(s, e) };
-  }
-  const m = $("#modeMonth").value || currentMonth();
-  return { label: `单月 · ${m}`, months: [m] };
+function currentRangeForSankey() {
+  const s = state.period.start, e = state.period.end;
+  return { label: `${s} ~ ${e}`, start: s, end: e };
 }
 
 function renderSankey() {
-  const { label, months } = currentMonthsForSankey();
-  const data = buildSankeyMonths(months);
+  const { label, start, end } = currentRangeForSankey();
+  const data = buildSankeyRange(start, end);
   $("#sankeyTitle").textContent = label;
   renderMetrics(data);
   if (data.empty) {
@@ -511,8 +775,10 @@ function renderMetrics(d) {
 }
 
 /* ================= 渲染：日历 ================= */
-function renderCalendar() {
-  const month = $("#calMonth").value || currentMonth();
+function renderCalendar() { renderCalendarGrid(); renderDayDetail(); }
+
+function renderCalendarGrid() {
+  const month = (calMonthPick && calMonthPick.value) || currentMonth();
   let [y, m] = month.split("-").map(Number);
   if (!selectedDate || ymOf(selectedDate) !== month) selectedDate = ymdFrom(y, m, 1);
   const weekDays = ["一", "二", "三", "四", "五", "六", "日"];
@@ -545,9 +811,9 @@ function renderCalendar() {
 
   $$("#calGrid .cal-cell[data-date]").forEach(el => el.addEventListener("click", () => {
     selectedDate = el.dataset.date;
-    renderCalendar();
+    renderCalendarGrid();
+    renderDayDetail();
   }));
-  renderDayDetail();
 }
 
 function displayName(name) {
@@ -569,14 +835,8 @@ function itemPeriodTotal(it) {
   if (s.type === "oneoff") return { label: s.date, count: 1, total: it.amount };
   if (s.type === "monthly") return { label: `按月手动 ${s.month}`, count: 1, total: it.amount };
   const winEnd = s.end || state.period.end;
-  const winLabel = s.end ? `${s.start} ~ ${s.end}` : `${s.start} ~ ${winEnd}（当前整体区间）`;
-  let count = 0;
-  const months = monthsBetween(ymOf(s.start), winEnd);
-  for (const month of months) {
-    const [y, m] = month.split("-").map(Number);
-    const occ = ymdFrom(y, m, clampDay(y, m, s.dayOfMonth));
-    if (occ >= s.start && occ <= (s.end || `${winEnd}-31`)) count++;
-  }
+  const winLabel = s.end ? `${s.start} ~ ${s.end}` : `${s.start} ~ ${winEnd}（当前区间）`;
+  const count = occurrencesInRange(it, s.start, winEnd);
   return { label: winLabel, count, total: count * it.amount };
 }
 
@@ -626,7 +886,7 @@ function renderItemList() {
     const idv = row.dataset.id;
     const item = state.items.find(i => i.id === idv);
     if (!item) return;
-    $("[data-role=toggle]", row).addEventListener("change", (e) => { item.enabled = e.target.checked; afterMutate(); });
+    $("[data-role=toggle]", row).addEventListener("change", (e) => onToggle(item, row, e.target.checked, "list"));
     $("[data-role=edit]", row).addEventListener("click", () => openForm(item));
     $("[data-role=delete]", row).addEventListener("click", () => deleteItem(idv));
   });
@@ -650,7 +910,7 @@ function renderDayDetail() {
     const idv = row.dataset.id;
     const item = state.items.find(i => i.id === idv);
     if (!item) return;
-    $("[data-role=toggle]", row).addEventListener("change", (e) => { item.enabled = e.target.checked; afterMutate(); });
+    $("[data-role=toggle]", row).addEventListener("change", (e) => onToggle(item, row, e.target.checked, "day"));
     $("[data-role=edit]", row).addEventListener("click", () => openForm(item));
     $("[data-role=delete]", row).addEventListener("click", () => deleteItem(idv));
     const adddate = $("[data-role=adddate]", row);
@@ -659,9 +919,92 @@ function renderDayDetail() {
   $("#dayAdd").addEventListener("click", () => openForm(null, { type: "oneoff", date: selectedDate }));
 }
 
-function renderAll() { renderCatDatalist(); renderItemList(); renderCalendar(); renderSankey(); renderLedgerSelect(); }
+function renderAll() { renderCatDatalist(); renderItemList(); renderCalendar(); renderSankey(); renderLedgerSelect(); renderTable(); }
+
+/* ================= 表格视图（直接编辑 SQLite 行） ================= */
+function renderTable() {
+  const wrap = $("#tableWrap");
+  if (!wrap) return;
+  const kindOpts = ["income", "expense", "loan"];
+  const schedOpts = [["recurring", "重复"], ["oneoff", "一次性"], ["monthly", "按月"]];
+  let html = '<table class="md-table"><thead><tr>' +
+    '<th>名称</th><th>类型</th><th>分类</th><th>金额</th><th>启用</th><th>排期</th>' +
+    '<th>开始日期</th><th>结束日期</th><th>每月几号</th><th>日期</th><th>归属月份</th><th>备注</th><th></th>' +
+    '</tr></thead><tbody>';
+  state.items.forEach((it, idx) => {
+    const s = it.schedule || {};
+    html += `<tr data-idx="${idx}">` +
+      `<td><input class="t-input" data-f="name" value="${escapeHtml(it.name)}"></td>` +
+      `<td><select class="t-input" data-f="kind">${kindOpts.map(k => `<option value="${k}" ${it.kind === k ? "selected" : ""}>${KIND_LABEL[k]}</option>`).join("")}</select></td>` +
+      `<td><input class="t-input" data-f="category" value="${escapeHtml(it.category || "")}"></td>` +
+      `<td><input class="t-input" type="number" step="0.01" data-f="amount" value="${it.amount}"></td>` +
+      `<td class="center"><input type="checkbox" data-f="enabled" ${it.enabled ? "checked" : ""}></td>` +
+      `<td><select class="t-input" data-f="sched_type">${schedOpts.map(([v, l]) => `<option value="${v}" ${s.type === v ? "selected" : ""}>${l}</option>`).join("")}</select></td>` +
+      `<td><input class="t-input" type="date" data-f="start" value="${s.start || ""}"></td>` +
+      `<td><input class="t-input" type="date" data-f="end" value="${s.end || ""}"></td>` +
+      `<td><input class="t-input" type="number" min="1" max="31" data-f="day" value="${s.dayOfMonth == null ? "" : s.dayOfMonth}"></td>` +
+      `<td><input class="t-input" type="date" data-f="date" value="${s.date || ""}"></td>` +
+      `<td><input class="t-input" type="month" data-f="month" value="${s.month || ""}"></td>` +
+      `<td><input class="t-input" data-f="note" value="${escapeHtml(it.note || "")}"></td>` +
+      `<td><button class="btn t-del" data-del="${idx}">删除</button></td>` +
+      '</tr>';
+  });
+  html += '</tbody></table>';
+  html += '<button class="btn btn-primary t-add" id="tableAdd">＋ 新增行</button>';
+  wrap.innerHTML = html;
+
+  wrap.querySelectorAll("tr[data-idx]").forEach(tr => {
+    const idx = Number(tr.dataset.idx);
+    tr.querySelectorAll("[data-f]").forEach(el => {
+      el.addEventListener("change", () => applyTableCell(idx, el.dataset.f, el));
+    });
+  });
+  wrap.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => {
+    state.items.splice(Number(b.dataset.del), 1);
+    afterMutate();
+  }));
+  $("#tableAdd").addEventListener("click", () => {
+    state.items.push(mkItem("新项目", "expense", "其他支出", 0, { type: "recurring", start: todayYmd(), end: null, dayOfMonth: 1 }));
+    afterMutate();
+  });
+}
+
+function applyTableCell(idx, field, el) {
+  const it = state.items[idx];
+  if (!it) return;
+  if (field === "name") it.name = el.value;
+  else if (field === "kind") it.kind = el.value;
+  else if (field === "category") it.category = el.value;
+  else if (field === "amount") it.amount = Number(el.value) || 0;
+  else if (field === "enabled") it.enabled = el.checked;
+  else if (field === "note") it.note = el.value;
+  else {
+    const s = it.schedule;
+    if (field === "sched_type") s.type = el.value;
+    else if (field === "start") s.start = el.value || null;
+    else if (field === "end") s.end = el.value || null;
+    else if (field === "day") s.dayOfMonth = el.value ? Number(el.value) : null;
+    else if (field === "date") s.date = el.value || null;
+    else if (field === "month") s.month = el.value || null;
+  }
+  persist();
+  renderSankey();
+  renderCalendarGrid();
+  renderItemList();
+  renderCatDatalist();
+}
 
 function afterMutate() { persist(); renderAll(); }
+
+/* 开关：不重建列表（保留 DOM 以便播放开关动画） */
+function onToggle(item, row, checked, source) {
+  item.enabled = checked;
+  if (row) row.classList.toggle("disabled", !checked);
+  persist();
+  renderSankey();
+  renderCalendarGrid();
+  if (source !== "day") renderDayDetail();
+}
 
 /* ================= 持久化 ================= */
 let savedTimer = null;
@@ -685,16 +1028,14 @@ function flashSaved(text, isError) {
 
 /* ================= 账单（数据集） ================= */
 function renderLedgerSelect() {
-  const sel = $("#ledgerSelect");
-  if (!sel) return;
-  sel.innerHTML = ledgers.map(l =>
-    `<option value="${l.id}" ${String(l.id) === String(activeLedgerId) ? "selected" : ""}>${escapeHtml(l.name)}（${l.itemCount}）</option>`
-  ).join("");
+  if (!ledgerSel) return;
+  ledgerSel.setOptions(ledgers.map(l => ({ value: l.id, label: `${l.name}（${l.itemCount}）` })));
+  ledgerSel.setValue(activeLedgerId);
 }
 
 async function loadActiveLedger() {
   const l = await store.get(activeLedgerId);
-  state = { ledgerId: l.id, period: { start: l.periodStart, end: l.periodEnd }, items: l.items || [] };
+  state = { ledgerId: l.id, period: normalizePeriod({ start: l.periodStart, end: l.periodEnd }), items: l.items || [] };
   try { localStorage.setItem(LS_ACTIVE, String(l.id)); } catch (e) { /* ignore */ }
   syncPeriodInputs();
   renderAll();
@@ -703,7 +1044,7 @@ async function loadActiveLedger() {
 async function refreshLedgers() { ledgers = await store.list(); renderLedgerSelect(); }
 
 async function newLedger() {
-  const name = prompt("新账单名称：", "新账单");
+  const name = await mdPrompt("新账单名称：", "新账单", "新建账单");
   if (!name) return;
   const l = await store.create(name.trim());
   activeLedgerId = l.id;
@@ -714,15 +1055,15 @@ async function newLedger() {
 async function renameLedger() {
   const cur = ledgers.find(l => String(l.id) === String(activeLedgerId));
   if (!cur) return;
-  const name = prompt("重命名账单：", cur.name);
+  const name = await mdPrompt("重命名账单：", cur.name, "重命名");
   if (!name) return;
   await store.rename(activeLedgerId, name.trim());
   await refreshLedgers();
 }
 
 async function deleteLedger() {
-  if (ledgers.length <= 1) { alert("至少保留一个账单"); return; }
-  if (!confirm("确定删除该账单及其全部项目？此操作不可撤销。")) return;
+  if (ledgers.length <= 1) { mdAlert("至少保留一个账单"); return; }
+  if (!(await mdConfirm("确定删除该账单及其全部项目？此操作不可撤销。", { title: "删除账单", confirmText: "删除", danger: true }))) return;
   await store.remove(activeLedgerId);
   ledgers = await store.list();
   activeLedgerId = ledgers[0].id;
@@ -738,20 +1079,20 @@ function showSchedFields(type) {
 
 function updatePeriodHint() {
   const hint = $("#fPeriodHint");
-  const type = $("#fSched").value;
+  const type = schedSel ? schedSel.value : "recurring";
   if (type !== "recurring") { hint.hidden = true; return; }
   const amount = Number($("#fAmount").value) || 0;
-  const start = $("#fStart").value;
+  const start = fStartPick ? fStartPick.value : null;
   const day = Number($("#fDay").value) || 1;
-  const end = $("#fEnd").value || null;
+  const end = (fEndPick && fEndPick.value) || null;
   if (!start) { hint.hidden = true; return; }
-  const winEnd = end ? ymOf(end) : state.period.end;
+  const winEnd = end || state.period.end;
   let count = 0;
-  const months = monthsBetween(ymOf(start), winEnd);
+  const months = monthsBetween(ymOf(start), ymOf(winEnd));
   for (const month of months) {
     const [y, m] = month.split("-").map(Number);
     const occ = ymdFrom(y, m, clampDay(y, m, day));
-    if (occ >= start && occ <= (end || `${winEnd}-31`)) count++;
+    if (occ >= start && occ <= winEnd) count++;
   }
   const total = count * amount;
   hint.hidden = false;
@@ -763,15 +1104,15 @@ function openForm(item, prefill) {
   $("#modalTitle").textContent = item ? "编辑项目" : "新增项目";
   $("#fName").value = item ? item.name : "";
   $("#fAmount").value = item ? item.amount : "";
-  $("#fKind").value = item ? item.kind : (prefill && prefill.kind) || "expense";
+  kindSel.setValue(item ? item.kind : (prefill && prefill.kind) || "expense");
   $("#fCategory").value = item ? (item.category || "") : "";
   const s = item ? item.schedule : (prefill || { type: "recurring" });
-  $("#fSched").value = s.type;
-  $("#fStart").value = s.type === "recurring" ? (s.start || "") : "";
-  $("#fEnd").value = s.type === "recurring" ? (s.end || "") : "";
+  schedSel.setValue(s.type);
+  fStartPick.setValue(s.type === "recurring" ? (s.start || "") : "");
+  fEndPick.setValue(s.type === "recurring" ? (s.end || "") : "");
   $("#fDay").value = s.type === "recurring" ? (s.dayOfMonth || 1) : "";
-  $("#fDate").value = s.type === "oneoff" ? (s.date || (prefill && prefill.date) || "") : "";
-  $("#fMonth").value = s.type === "monthly" ? (s.month || currentMonth()) : "";
+  fDatePick.setValue(s.type === "oneoff" ? (s.date || (prefill && prefill.date) || "") : "");
+  fMonthPick.setValue(s.type === "monthly" ? (s.month || currentMonth()) : "");
   $("#fNote").value = item ? (item.note || "") : "";
   $("#fEnabled").checked = item ? item.enabled : true;
   showSchedFields(s.type);
@@ -786,25 +1127,25 @@ function submitForm(e) {
   e.preventDefault();
   const name = $("#fName").value.trim();
   const amount = Number($("#fAmount").value);
-  if (!name || isNaN(amount) || amount < 0) return alert("请填写名称和有效金额");
-  const kind = $("#fKind").value;
+  if (!name || isNaN(amount) || amount < 0) return mdAlert("请填写名称和有效金额");
+  const kind = kindSel.value;
   const category = $("#fCategory").value.trim() || (kind === "income" ? "其他收入" : "其他支出");
-  const type = $("#fSched").value;
+  const type = schedSel.value;
   let schedule;
   if (type === "recurring") {
-    const start = $("#fStart").value;
-    const end = $("#fEnd").value || null;
+    const start = fStartPick.value;
+    const end = fEndPick.value || null;
     const day = $("#fDay").value ? Number($("#fDay").value) : 1;
-    if (!start || !day) return alert("请选择开始日期并填写「每月几号」");
-    if (end && end < start) return alert("结束日期不能早于开始日期");
+    if (!start || !day) return mdAlert("请选择开始日期并填写「每月几号」");
+    if (end && end < start) return mdAlert("结束日期不能早于开始日期");
     schedule = { type: "recurring", start, end, dayOfMonth: day };
   } else if (type === "oneoff") {
-    const date = $("#fDate").value;
-    if (!date) return alert("请选择日期");
+    const date = fDatePick.value;
+    if (!date) return mdAlert("请选择日期");
     schedule = { type: "oneoff", date };
   } else {
-    const month = $("#fMonth").value;
-    if (!month) return alert("请选择归属月份");
+    const month = fMonthPick.value;
+    if (!month) return mdAlert("请选择归属月份");
     schedule = { type: "monthly", month };
   }
   const base = { name, kind, category, amount, enabled: $("#fEnabled").checked, note: $("#fNote").value.trim(), schedule };
@@ -818,7 +1159,10 @@ function submitForm(e) {
   afterMutate();
 }
 
-function deleteItem(idv) {
+async function deleteItem(idv) {
+  const it = state.items.find(i => i.id === idv);
+  if (!it) return;
+  if (!(await mdConfirm(`确定删除「${it.name}」？`, { title: "删除项目", confirmText: "删除", danger: true }))) return;
   state.items = state.items.filter(i => i.id !== idv);
   afterMutate();
 }
@@ -826,7 +1170,7 @@ function deleteItem(idv) {
 /* ================= 导出图 PNG（从自绘 SVG 转位图） ================= */
 function exportPng() {
   const svgEl = document.querySelector("#sankeyChart svg");
-  if (!svgEl) { alert("当前没有可导出的图表"); return; }
+  if (!svgEl) { mdAlert("当前没有可导出的图表"); return; }
   const clone = svgEl.cloneNode(true);
   clone.classList.remove("has-hover", "fade-in");
   clone.querySelectorAll(".hi").forEach(e => e.classList.remove("hi"));
@@ -852,13 +1196,13 @@ function exportPng() {
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     });
   };
-  img.onerror = () => { URL.revokeObjectURL(url); alert("导出图片失败"); };
+  img.onerror = () => { URL.revokeObjectURL(url); mdAlert("导出图片失败"); };
   img.src = url;
 }
 
 function syncPeriodInputs() {
-  $("#periodStart").value = state.period.start;
-  $("#periodEnd").value = state.period.end;
+  periodStartPick.setValue(state.period.start);
+  periodEndPick.setValue(state.period.end);
 }
 
 /* ================= 视图切换 / 事件绑定 ================= */
@@ -866,44 +1210,42 @@ function switchTab(tab) {
   $$(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
   $("#view-sankey").hidden = tab !== "sankey";
   $("#view-calendar").hidden = tab !== "calendar";
+  $("#view-table").hidden = tab !== "table";
   if (tab === "sankey" && lastSankeyData) setTimeout(() => renderSankeySvg(lastSankeyData, { fade: false }), 0);
+  if (tab === "table") renderTable();
 }
 
 function bindEvents() {
   $("#btnAdd").addEventListener("click", () => openForm(null));
-  $("#btnSeed").addEventListener("click", () => {
-    if (!confirm("用示例数据替换当前账单的全部项目？")) return;
+  $("#btnSeed").addEventListener("click", async () => {
+    if (!(await mdConfirm("用示例数据替换当前账单的全部项目？", { title: "载入示例", confirmText: "替换" }))) return;
     state.items = demoItems();
-    state.period = { start: "2026-01", end: "2026-12" };
+    state.period = { start: "2026-01-01", end: "2026-12-31" };
     syncPeriodInputs();
     afterMutate();
   });
   $("#btnExportCsv").addEventListener("click", async () => {
     try {
       const r = await store.exportCsv(state.ledgerId);
-      if (typeof r === "string" && r.startsWith("saved:")) alert("已导出 CSV：\n" + r.slice(6));
-    } catch (e) { alert("导出失败：" + e.message); }
+      if (r === "saved:browser") mdAlert("已开始下载 CSV");
+      else if (typeof r === "string" && r.startsWith("saved:")) mdAlert("已导出 CSV：\n" + r.slice(6));
+    } catch (e) { mdAlert("导出失败：" + e.message); }
   });
   $("#btnExportSqlite").addEventListener("click", async () => {
     try {
       const r = await store.exportSqlite(state.ledgerId);
-      if (r === "unsupported") alert("导出 .sqlite 仅桌面版支持（浏览器版请用 CSV）");
-      else if (typeof r === "string" && r.startsWith("saved:")) alert("已导出 .sqlite：\n" + r.slice(6));
-    } catch (e) { alert("导出失败：" + e.message); }
+      if (r === "unsupported") mdAlert("导出 .sqlite 仅桌面版支持（请改用 CSV）");
+      else if (r === "saved:browser") mdAlert("已开始下载 .sqlite");
+      else if (typeof r === "string" && r.startsWith("saved:")) mdAlert("已导出 .sqlite：\n" + r.slice(6));
+    } catch (e) { mdAlert("导出失败：" + e.message); }
   });
   $("#btnExportPng").addEventListener("click", exportPng);
   $("#modalClose").addEventListener("click", closeForm);
   $("#btnCancel").addEventListener("click", closeForm);
   $("#itemForm").addEventListener("submit", submitForm);
   $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeForm(); });
-  $("#fSched").addEventListener("change", () => { showSchedFields($("#fSched").value); updatePeriodHint(); });
-  ["fAmount", "fDay", "fStart", "fEnd"].forEach(fid => $("#" + fid).addEventListener("input", updatePeriodHint));
+  ["fAmount", "fDay"].forEach(fid => $("#" + fid).addEventListener("input", updatePeriodHint));
 
-  // 账单切换
-  $("#ledgerSelect").addEventListener("change", async (e) => {
-    activeLedgerId = e.target.value;
-    await loadActiveLedger();
-  });
   $("#btnNewLedger").addEventListener("click", newLedger);
   $("#btnRenameLedger").addEventListener("click", renameLedger);
   $("#btnDeleteLedger").addEventListener("click", deleteLedger);
@@ -911,42 +1253,97 @@ function bindEvents() {
   // 视图 Tab
   $$(".tab").forEach(t => t.addEventListener("click", () => switchTab(t.dataset.tab)));
 
-  // 桑基模式
-  $$("#sankeyMode button").forEach(b => b.addEventListener("click", () => {
-    $$("#sankeyMode button").forEach(x => x.classList.remove("active"));
-    b.classList.add("active");
-    $("#periodFields").hidden = b.dataset.mode !== "overall";
-    $("#modeMonth").parentElement.hidden = b.dataset.mode === "overall";
-    renderSankey();
-  }));
-
-  $("#modeMonth").addEventListener("change", renderSankey);
-  $("#periodStart").addEventListener("change", () => { state.period.start = $("#periodStart").value; persist(); renderSankey(); });
-  $("#periodEnd").addEventListener("change", () => { state.period.end = $("#periodEnd").value; persist(); renderSankey(); });
+  // 快捷区间
+  $("#btnThisMonth").addEventListener("click", () => {
+    const now = new Date();
+    const y = now.getFullYear(), m = now.getMonth() + 1;
+    state.period = { start: ymdFrom(y, m, 1), end: ymdFrom(y, m, daysIn(y, m)) };
+    periodStartPick.setValue(state.period.start);
+    periodEndPick.setValue(state.period.end);
+    persist(); renderSankey();
+  });
+  $("#btnThisYear").addEventListener("click", () => {
+    const y = new Date().getFullYear();
+    state.period = { start: ymdFrom(y, 1, 1), end: ymdFrom(y, 12, 31) };
+    periodStartPick.setValue(state.period.start);
+    periodEndPick.setValue(state.period.end);
+    persist(); renderSankey();
+  });
 
   const shift = (n) => {
-    let [y, m] = ($("#calMonth").value || currentMonth()).split("-").map(Number);
+    let [y, m] = ((calMonthPick && calMonthPick.value) || currentMonth()).split("-").map(Number);
     m += n; while (m < 1) { m += 12; y--; } while (m > 12) { m -= 12; y++; }
-    $("#calMonth").value = `${y}-${pad(m)}`;
+    calMonthPick.setValue(`${y}-${pad(m)}`);
     selectedDate = ymdFrom(y, m, 1);
     renderCalendar();
   };
   $("#calPrev").addEventListener("click", () => shift(-1));
   $("#calNext").addEventListener("click", () => shift(1));
-  $("#calToday").addEventListener("click", () => { $("#calMonth").value = currentMonth(); selectedDate = todayYmd(); renderCalendar(); });
-  $("#calMonth").addEventListener("change", () => { selectedDate = null; renderCalendar(); });
+  $("#calToday").addEventListener("click", () => { calMonthPick.setValue(currentMonth()); selectedDate = todayYmd(); renderCalendar(); });
 
   window.addEventListener("resize", () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => { if (lastSankeyData) renderSankeySvg(lastSankeyData, { fade: false }); }, 140);
+    if (resizeRaf) return;
+    resizeRaf = requestAnimationFrame(() => {
+      resizeRaf = null;
+      if (lastSankeyData) renderSankeySvg(lastSankeyData, { fade: false });
+    });
+  });
+}
+
+function initWindowControls() {
+  if (!HAS_NATIVE) return;
+  $("#winControls").hidden = false;
+  $("#winMin").addEventListener("click", () => nativeCall("WindowMinimize").catch(() => {}));
+  $("#winMax").addEventListener("click", () => nativeCall("WindowMaximizeToggle").catch(() => {}));
+  $("#winClose").addEventListener("click", () => nativeCall("WindowClose").catch(() => {}));
+
+  const topbar = $(".topbar");
+  const isInteractive = (t) => !!(t && t.closest && t.closest("button, input, select, .md-select, .md-datepicker, .win-controls, .ledger-bar, .topbar-actions"));
+  topbar.addEventListener("mousedown", (e) => {
+    if (e.button !== 0 || isInteractive(e.target)) return;
+    e.preventDefault();
+    nativeCall("WindowDragStart").catch(() => {});
+  });
+  topbar.addEventListener("dblclick", (e) => {
+    if (isInteractive(e.target)) return;
+    nativeCall("WindowMaximizeToggle").catch(() => {});
   });
 }
 
 async function init() {
-  $("#modeMonth").value = currentMonth();
-  $("#calMonth").value = currentMonth();
   bindEvents();
+  initWindowControls();
+
+  calMonthPick = new MdDatePicker($("#calMonth"), "month", () => { selectedDate = null; renderCalendar(); });
+  periodStartPick = new MdDatePicker($("#periodStart"), "date", (v) => { state.period.start = v; persist(); renderSankey(); });
+  periodEndPick = new MdDatePicker($("#periodEnd"), "date", (v) => { state.period.end = v; persist(); renderSankey(); });
+  fStartPick = new MdDatePicker($("#fStart"), "date", () => updatePeriodHint());
+  fEndPick = new MdDatePicker($("#fEnd"), "date", () => updatePeriodHint());
+  fDatePick = new MdDatePicker($("#fDate"), "date");
+  fMonthPick = new MdDatePicker($("#fMonth"), "month");
+  calMonthPick.setValue(currentMonth());
+
+  ledgerSel = new MdSelect($("#ledgerSelect"), async (v) => {
+    activeLedgerId = /^\d+$/.test(String(v)) ? Number(v) : v;
+    try { await loadActiveLedger(); } catch (e) { mdAlert("切换账单失败：" + e.message); }
+  });
+  kindSel = new MdSelect($("#fKind"));
+  kindSel.setOptions([
+    { value: "income", label: "收入" },
+    { value: "expense", label: "支出" },
+    { value: "loan", label: "支出 · 借贷/分期" },
+  ]);
+  kindSel.setValue("expense");
+  schedSel = new MdSelect($("#fSched"), (v) => { showSchedFields(v); updatePeriodHint(); });
+  schedSel.setOptions([
+    { value: "recurring", label: "重复 · 固定日期（自定开始/结束）" },
+    { value: "oneoff", label: "一次性 · 确定日期" },
+    { value: "monthly", label: "按月手动（非固定日期）" },
+  ]);
+  schedSel.setValue("recurring");
+
   try {
+    HAS_API = await probeApi();
     ledgers = await store.list();
     window.__ledgersLoaded = ledgers.length;
     let savedActive = null;
@@ -959,7 +1356,7 @@ async function init() {
     console.error(e);
     window.__initError = e.message;
     if (HAS_NATIVE) nativeCall("Log", "init FAILED: " + e.message).catch(() => {});
-    alert("初始化失败：" + e.message);
+    mdAlert("初始化失败：" + e.message);
   }
 }
 
