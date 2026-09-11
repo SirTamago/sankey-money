@@ -587,10 +587,10 @@ function renderSankeySvg(data, opts) {
   const groups = [];
   for (let d = 0; d <= maxDepth; d++) groups.push(nodes.filter(n => (n.depth || 0) === d));
 
-  // 边距随宽度自适应，窄窗口时给列留出足够间距
+  // 边距随尺寸自适应：窄窗口给列留间距，矮图表减少上下留白
   const padL = Math.max(72, Math.min(150, W * 0.15));
   const padR = Math.max(96, Math.min(200, W * 0.2));
-  const padT = 68, padB = 68;
+  const padT = Math.min(68, H * 0.15), padB = Math.min(68, H * 0.15);
   const availH = H - padT - padB;
   let scale = Infinity;
   for (const g of groups) {
