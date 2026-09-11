@@ -1,6 +1,8 @@
 # 构建产物
 dist/
 dist-md3/
+SankeyMoney-portable/
+*.zip
 desktop/bin/
 desktop/obj/
 
