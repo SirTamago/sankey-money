@@ -24,7 +24,7 @@ public sealed class SqliteStore
 
     public SqliteStore()
     {
-        var dir = Path.Combine(AppContext.BaseDirectory, "data");
+        var dir = Path.Combine(AppPaths.ExeDir, "data");
         if (!TryEnsureWritable(dir))
         {
             dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SankeyMoney");

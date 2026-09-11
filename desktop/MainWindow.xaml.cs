@@ -12,7 +12,7 @@ namespace SankeyMoney;
 
 public sealed partial class MainWindow : Window
 {
-    private static readonly string LogPath = Path.Combine(AppContext.BaseDirectory, "app.log");
+    private static readonly string LogPath = Path.Combine(AppPaths.ExeDir, "app.log");
     private readonly SqliteStore _store;
     private readonly NativeBridge _bridge;
 
@@ -43,7 +43,7 @@ public sealed partial class MainWindow : Window
             }
             Log("window sized + frameless (MD3 title bar)");
 
-            var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
+            var iconPath = Path.Combine(AppPaths.AssetsDir, "Assets", "app.ico");
             if (File.Exists(iconPath)) { appWindow.SetIcon(iconPath); Log("window icon set"); }
         }
         catch (Exception ex) { Log("window setup failed: " + ex.Message); }
@@ -65,7 +65,7 @@ public sealed partial class MainWindow : Window
 
             Web.CoreWebView2.WebMessageReceived += OnWebMessage;
 
-            var wwwroot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+            var wwwroot = Path.Combine(AppPaths.AssetsDir, "wwwroot");
             Log("wwwroot=" + wwwroot + " exists=" + Directory.Exists(wwwroot));
             Web.CoreWebView2.SetVirtualHostNameToFolderMapping(
                 "app.local", wwwroot, CoreWebView2HostResourceAccessKind.Allow);
