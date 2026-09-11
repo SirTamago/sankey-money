@@ -571,7 +571,7 @@ html.native, html.native body { background: var(--md-surface); }
   .metric-card { padding: 12px; }
   .metric-value { font-size: 22px; line-height: 28px; }
   .control-row { gap: 8px; }
-  .chart { height: clamp(280px, 42vh, 380px); }
+  .chart { height: clamp(340px, 60vh, 520px); }
   .calendar-wrap { padding: 8px; }
   .cal-grid { grid-auto-rows: 74px; gap: 4px; }
   .cal-cell { height: 74px; padding: 4px; }
