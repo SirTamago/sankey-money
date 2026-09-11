@@ -102,6 +102,21 @@ html, body {
 .win-btn:hover { background: color-mix(in srgb, var(--md-on-surface) 10%, transparent); color: var(--md-on-surface); }
 .win-btn.win-close:hover { background: var(--md-error); color: var(--md-on-error); }
 
+/* ---------- 移动端抽屉相关（桌面隐藏） ---------- */
+.icon-btn {
+  width: 44px; height: 44px; flex: none; border: none; background: transparent;
+  color: var(--md-on-surface); border-radius: 50%; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background .12s ease;
+}
+.icon-btn:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+.drawer-toggle, .add-mobile { display: none; }
+.add-mobile { margin-left: auto; }
+.sidebar-head { display: none; }
+.sidebar-slot { display: none; }
+.drawer-scrim { display: none; }
+.tt-short { display: none; }
+
 /* ---------- 按钮 ---------- */
 .btn {
   appearance: none;
@@ -505,10 +520,64 @@ html.native, html.native body { background: var(--md-surface); }
   .sidebar { width: 260px; min-width: 220px; }
   .metric-row { grid-template-columns: repeat(2, 1fr); }
 }
-@media (max-width: 860px) {
-  .layout { flex-direction: column; }
-  .sidebar { width: 100%; min-width: 0; max-height: 40vh; border-right: none; border-bottom: 1px solid var(--md-outline-variant); }
-  .metric-row { grid-template-columns: repeat(2, 1fr); }
-  .cal-grid { grid-auto-rows: 84px; }
-  .cal-cell { height: 84px; }
+
+/* ---------- 移动端（竖屏）：菜单 / 账单 / 操作收进侧滑抽屉 ---------- */
+@media (max-width: 820px) {
+  .drawer-toggle { display: inline-flex; }
+  .add-mobile { display: inline-flex; }
+  .brand .tagline { display: none; }
+  .brand h1 { font-size: 16px; line-height: 22px; }
+  .tt-full { display: none; }
+  .tt-short { display: inline; }
+
+  .layout { display: block; }
+  .main { height: 100%; }
+
+  .sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0;
+    width: 290px; max-width: 86vw; min-width: 0; max-height: none;
+    z-index: 60;
+    transform: translateX(-102%);
+    transition: transform .24s cubic-bezier(.2, 0, 0, 1);
+    border-right: 1px solid var(--md-outline-variant);
+    box-shadow: 0 0 28px rgba(0, 0, 0, .45);
+  }
+  .sidebar.open { transform: none; }
+  .sidebar-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin: 2px 0 12px; font-size: 15px; font-weight: 500; color: var(--md-on-surface);
+  }
+  .sidebar-slot {
+    display: flex; flex-direction: column; gap: 10px;
+    padding-bottom: 14px; margin-bottom: 14px;
+    border-bottom: 1px solid var(--md-outline-variant);
+  }
+  .sidebar-slot .ledger-bar { margin-left: 0; flex-direction: column; align-items: stretch; gap: 8px; }
+  .sidebar-slot .ledger-bar .md-select { width: 100%; min-width: 0; }
+  .sidebar-slot .ledger-bar > .btn { justify-content: flex-start; }
+  .sidebar-slot .topbar-actions { flex-direction: column; align-items: stretch; }
+  .sidebar-slot .topbar-actions .btn { justify-content: flex-start; }
+
+  .drawer-scrim {
+    display: block; position: fixed; inset: 0; z-index: 55;
+    background: rgba(0, 0, 0, .6); opacity: 0; transition: opacity .2s ease;
+  }
+  .drawer-scrim.open { opacity: 1; }
+
+  .tabs { padding: 0 6px; }
+  .tab { flex: 1; padding: 14px 6px 12px; text-align: center; }
+  .view { padding: 14px 12px 28px; }
+  .metric-row { gap: 8px; }
+  .metric-card { padding: 12px; }
+  .metric-value { font-size: 22px; line-height: 28px; }
+  .control-row { gap: 8px; }
+  .chart { height: clamp(340px, 60vh, 520px); }
+  .calendar-wrap { padding: 8px; }
+  .cal-grid { grid-auto-rows: 74px; gap: 4px; }
+  .cal-cell { height: 74px; padding: 4px; }
+  .cal-num { font-size: 11px; }
+  .chip { font-size: 10px; padding: 1px 4px; }
+  .modal { padding: 12px; }
+  .modal-box { max-width: 100%; }
+  .grid-2 { grid-template-columns: 1fr; gap: 12px; }
 }

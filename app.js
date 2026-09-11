@@ -1217,6 +1217,18 @@ function switchTab(tab) {
 
 function bindEvents() {
   $("#btnAdd").addEventListener("click", () => openForm(null));
+
+  // 移动端抽屉
+  $("#btnAddMobile").addEventListener("click", () => openForm(null));
+  $("#btnDrawer").addEventListener("click", () => {
+    ($(".sidebar").classList.contains("open") ? closeDrawer : openDrawer)();
+  });
+  $("#btnDrawerClose").addEventListener("click", closeDrawer);
+  $("#drawerScrim").addEventListener("click", closeDrawer);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+  // 抽屉里点了按钮后自动收起（先让按钮自己的处理跑完）
+  $(".sidebar").addEventListener("click", (e) => { if (isMobile() && e.target.closest(".btn")) setTimeout(closeDrawer, 0); });
+  mqMobile.addEventListener("change", applyResponsive);
   $("#btnSeed").addEventListener("click", async () => {
     if (!(await mdConfirm("用示例数据替换当前账单的全部项目？", { title: "载入示例", confirmText: "替换" }))) return;
     state.items = demoItems();
@@ -1310,9 +1322,42 @@ function initWindowControls() {
   });
 }
 
+/* ================= 移动端抽屉 / 响应式 ================= */
+const mqMobile = window.matchMedia("(max-width: 820px)");
+function isMobile() { return mqMobile.matches; }
+
+function openDrawer() {
+  const sb = $(".sidebar"); if (!sb) return;
+  sb.classList.add("open");
+  const sc = $("#drawerScrim");
+  if (sc) { sc.hidden = false; requestAnimationFrame(() => sc.classList.add("open")); }
+}
+function closeDrawer() {
+  const sb = $(".sidebar"); if (sb) sb.classList.remove("open");
+  const sc = $("#drawerScrim"); if (!sc || sc.hidden) return;
+  sc.classList.remove("open");
+  setTimeout(() => { if (!sc.classList.contains("open")) sc.hidden = true; }, 220);
+}
+/* 移动端把「账单栏 + 操作」移进抽屉；桌面移回顶栏 */
+function applyResponsive() {
+  const topbar = $(".topbar"), slot = $("#sidebarSlot");
+  const ledgerBar = $(".ledger-bar"), actions = $(".topbar-actions");
+  if (!topbar || !slot || !ledgerBar || !actions) return;
+  if (isMobile()) {
+    slot.appendChild(ledgerBar);
+    slot.appendChild(actions);
+  } else {
+    closeDrawer();
+    const brand = $(".brand");
+    topbar.insertBefore(ledgerBar, brand ? brand.nextSibling : topbar.firstChild);
+    topbar.insertBefore(actions, ledgerBar.nextSibling);
+  }
+}
+
 async function init() {
   bindEvents();
   initWindowControls();
+  applyResponsive();
 
   calMonthPick = new MdDatePicker($("#calMonth"), "month", () => { selectedDate = null; renderCalendar(); });
   periodStartPick = new MdDatePicker($("#periodStart"), "date", (v) => { state.period.start = v; persist(); renderSankey(); });

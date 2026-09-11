@@ -1,23 +1,35 @@
-# 收支 / 分期 桑基图看板（纯静态网页版 · `webui` 分支）
+# 收支 / 分期 桑基图看板（移动端 · `mobile` 分支）
 
-纯静态网页：数据存在浏览器 **localStorage**，无需后端。此分支已连接到 **Cloudflare Pages** 自动部署。
+在纯静态网页版基础上做了**移动端竖屏适配**：把菜单、账单选择、各项操作全部收进**侧滑抽屉**，内容改为单列布局。纯静态（localStorage），已连接到 **Cloudflare Pages**。
 
-- 线上地址：**https://sankey-money.pages.dev**
-- Cloudflare Pages 项目：`sankey-money`，生产分支 `webui`
-- 无构建步骤：构建命令留空，输出目录为仓库根目录
+- 线上地址：**https://sankey-money-mobile.pages.dev**
+- Cloudflare Pages 项目：`sankey-money-mobile`，生产分支 `mobile`
+
+## 移动端适配（≤820px）
+
+- **顶栏**：`☰` 菜单按钮 + 标题 + `＋` 新增项目按钮
+- **侧滑抽屉**（从左侧滑出，带遮罩，点遮罩/按 Esc/点任一操作后自动收起）：
+  - 账单选择与 新建 / 重命名 / 删除
+  - 载入示例 / 导出 CSV / 导出 .sqlite
+  - 项目列表（含每项的编辑 / 删除）
+- **单列布局**：指标卡两列、日历与表格自适应、弹窗近全宽
+- 桌面（≥820px）自动恢复为「左侧栏 + 顶栏」布局，同一份代码
 
 ## 本地运行
 
 ```bash
 python -m http.server 8123
-# 浏览器打开 http://127.0.0.1:8123
+# 浏览器打开 http://127.0.0.1:8123（可用 DevTools 切到手机视图）
 ```
 
-## 说明
+## 分支
 
-- 本分支是**纯静态**版本（localStorage），适合直接托管到 Pages / 任意静态托管。
-- 带本地 Python 后端（SQLite）的网页版在 **`web`** 分支。
-- Windows 桌面版（WinUI 3 + SQLite）在 **`md3`** 分支。
+| 分支 | 说明 |
+| --- | --- |
+| **mobile**（当前） | 移动端适配版（静态，Cloudflare Pages） |
+| webui | 桌面网页版（静态，Cloudflare Pages: sankey-money.pages.dev） |
+| web | 网页版 + 本地 Python 后端（SQLite） |
+| md3 | Windows 桌面版（WinUI 3 + SQLite） |
 
 ## 功能
 
