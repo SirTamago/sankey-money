@@ -89,6 +89,29 @@ if (HAS_NATIVE) {
   });
 }
 
+/* 网页版：本地后端 API（server.py）。探测不到就回退 localStorage。 */
+let HAS_API = false;
+async function probeApi() {
+  if (HAS_NATIVE) return false;
+  try {
+    const r = await fetch("api/health", { cache: "no-store" });
+    if (!r.ok) return false;
+    return !!(await r.json()).ok;
+  } catch (e) { return false; }
+}
+async function api(method, path, body) {
+  const opt = { method, cache: "no-store" };
+  if (body !== undefined) { opt.headers = { "Content-Type": "application/json" }; opt.body = JSON.stringify(body); }
+  const r = await fetch(path, opt);
+  if (!r.ok) throw new Error(method + " " + path + " -> HTTP " + r.status);
+  const txt = await r.text();
+  return txt ? JSON.parse(txt) : null;
+}
+function downloadUrl(url) {
+  const a = document.createElement("a");
+  a.href = url; a.click();
+}
+
 const LS_KEY = "sankey-money-ledgers-v2";
 const LS_ACTIVE = "sankey-money-active";
 
@@ -125,10 +148,12 @@ function lsData() { let d = lsRead(); if (!d) { d = lsSeed(); lsWrite(d); } retu
 const store = {
   async list() {
     if (HAS_NATIVE) return JSON.parse(await nativeCall("ListLedgers"));
+    if (HAS_API) return await api("GET", "api/ledgers");
     return lsData().ledgers.map(l => ({ id: l.id, name: l.name, periodStart: l.periodStart, periodEnd: l.periodEnd, itemCount: (l.items || []).length }));
   },
   async get(idVal) {
     if (HAS_NATIVE) return JSON.parse(await nativeCall("GetLedger", idVal));
+    if (HAS_API) return await api("GET", "api/ledgers/" + idVal);
     const d = lsData();
     const l = d.ledgers.find(x => String(x.id) === String(idVal));
     if (!l) throw new Error("账单不存在");
@@ -136,6 +161,7 @@ const store = {
   },
   async create(name) {
     if (HAS_NATIVE) return JSON.parse(await nativeCall("CreateLedger", name));
+    if (HAS_API) return await api("POST", "api/ledgers", { name });
     const d = lsData();
     const nid = Math.max(0, ...d.ledgers.map(l => l.id)) + 1;
     const l = { id: nid, name, periodStart: "2026-01-01", periodEnd: "2026-12-31", items: [] };
@@ -144,29 +170,34 @@ const store = {
   },
   async rename(idVal, name) {
     if (HAS_NATIVE) { await nativeCall("RenameLedger", idVal, name); return; }
+    if (HAS_API) { await api("PATCH", "api/ledgers/" + idVal, { name }); return; }
     const d = lsData();
     const l = d.ledgers.find(x => String(x.id) === String(idVal));
     if (l) { l.name = name; lsWrite(d); }
   },
   async remove(idVal) {
     if (HAS_NATIVE) { await nativeCall("DeleteLedger", idVal); return; }
+    if (HAS_API) { await api("DELETE", "api/ledgers/" + idVal); return; }
     const d = lsData();
     d.ledgers = d.ledgers.filter(x => String(x.id) !== String(idVal)); lsWrite(d);
   },
   async save(idVal, ps, pe, items) {
     if (HAS_NATIVE) { await nativeCall("SaveLedger", idVal, ps, pe, JSON.stringify(items)); return; }
+    if (HAS_API) { await api("PUT", "api/ledgers/" + idVal + "/items", { period_start: ps, period_end: pe, items }); return; }
     const d = lsData();
     const l = d.ledgers.find(x => String(x.id) === String(idVal));
     if (l) { l.periodStart = ps; l.periodEnd = pe; l.items = items; lsWrite(d); }
   },
   async exportCsv(idVal) {
     if (HAS_NATIVE) return await nativeCall("ExportCsv", idVal);
+    if (HAS_API) { downloadUrl("api/ledgers/" + idVal + "/export.csv"); return "saved:browser"; }
     const l = await store.get(idVal);
     downloadText(buildCsv(l), l.name + ".csv");
     return "saved:browser";
   },
   async exportSqlite(idVal) {
     if (HAS_NATIVE) return await nativeCall("ExportSqlite", idVal);
+    if (HAS_API) { downloadUrl("api/ledgers/" + idVal + "/export.sqlite"); return "saved:browser"; }
     return "unsupported";
   }
 };
@@ -1196,13 +1227,15 @@ function bindEvents() {
   $("#btnExportCsv").addEventListener("click", async () => {
     try {
       const r = await store.exportCsv(state.ledgerId);
-      if (typeof r === "string" && r.startsWith("saved:")) mdAlert("已导出 CSV：\n" + r.slice(6));
+      if (r === "saved:browser") mdAlert("已开始下载 CSV");
+      else if (typeof r === "string" && r.startsWith("saved:")) mdAlert("已导出 CSV：\n" + r.slice(6));
     } catch (e) { mdAlert("导出失败：" + e.message); }
   });
   $("#btnExportSqlite").addEventListener("click", async () => {
     try {
       const r = await store.exportSqlite(state.ledgerId);
-      if (r === "unsupported") mdAlert("导出 .sqlite 仅桌面版支持（浏览器版请用 CSV）");
+      if (r === "unsupported") mdAlert("导出 .sqlite 仅桌面版支持（请改用 CSV）");
+      else if (r === "saved:browser") mdAlert("已开始下载 .sqlite");
       else if (typeof r === "string" && r.startsWith("saved:")) mdAlert("已导出 .sqlite：\n" + r.slice(6));
     } catch (e) { mdAlert("导出失败：" + e.message); }
   });
@@ -1310,6 +1343,7 @@ async function init() {
   schedSel.setValue("recurring");
 
   try {
+    HAS_API = await probeApi();
     ledgers = await store.list();
     window.__ledgersLoaded = ledgers.length;
     let savedActive = null;
